@@ -1,0 +1,20 @@
+databases:
+  - name: lista-tarefas-db
+    plan: free
+
+services:
+  - type: web
+    name: lista-tarefas-armazem
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lista-tarefas-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true

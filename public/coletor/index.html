@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Coletor — Tarefas</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --blue:#185FA5;--blue-dark:#0C447C;--blue-light:#E6F1FB;
+  --green:#3B6D11;--green-light:#EAF3DE;
+  --amber:#BA7517;--amber-light:#FAEEDA;
+  --red:#A32D2D;--red-light:#FCEBEB;
+  --purple:#6B4FBB;--purple-light:#EFE9FB;
+  --border:#e0ddd6;--text:#1a1a18;--text2:#666560;--text3:#999890;
+  --bg:#ffffff;--bg2:#f8f7f4;--bg3:#f1f0ec;
+  --radius:8px;--radius-lg:12px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg2);color:var(--text);min-height:100vh;padding-bottom:80px}
+
+/* LOGIN */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.login-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;width:100%;max-width:340px;text-align:center}
+.login-box i.ti-device-mobile{font-size:40px;color:var(--blue);margin-bottom:10px;display:block}
+.login-box h1{font-size:18px;font-weight:600;margin-bottom:4px}
+.login-box p{font-size:13px;color:var(--text2);margin-bottom:20px}
+.login-box label{font-size:12px;font-weight:500;color:var(--text2);display:block;margin-bottom:4px;text-align:left}
+.login-box input{width:100%;padding:11px 12px;border-radius:var(--radius);border:1px solid var(--border);font-size:15px;margin-bottom:12px;text-align:center}
+.login-box input:focus{outline:none;border-color:var(--blue)}
+.login-err{font-size:13px;color:var(--red);margin-bottom:10px;display:none}
+.login-box button{width:100%;padding:12px;border-radius:var(--radius);border:none;background:var(--blue);color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+.login-box button:active{opacity:.8}
+
+/* HEADER */
+.header{background:var(--blue);color:#fff;padding:14px 16px 0;position:sticky;top:0;z-index:50}
+.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.header h1{font-size:15px;font-weight:600;display:flex;align-items:center;gap:7px}
+.header-right{display:flex;gap:6px}
+.refresh-btn{background:rgba(255,255,255,.2);border:none;border-radius:6px;color:#fff;padding:7px 10px;font-size:14px;cursor:pointer}
+.refresh-btn:active{opacity:.7}
+.user-pill{font-size:11px;background:rgba(255,255,255,.18);padding:6px 10px;border-radius:6px;display:flex;align-items:center;gap:5px}
+
+/* PROGRESS */
+.prog-wrap{height:3px;background:rgba(255,255,255,.25);margin:0 -16px}
+.prog-fill{height:3px;background:#fff;transition:width .5s;border-radius:0 2px 2px 0}
+
+/* STATS BAR */
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);background:var(--blue-dark);padding:10px 16px;gap:8px}
+.stat-item{text-align:center}
+.stat-val{font-size:20px;font-weight:700;color:#fff}
+.stat-label{font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.04em;margin-top:1px}
+.stat-item.tarefas .stat-val{color:#FFD580}
+
+/* MAIN TABS (Tarefas / aba de tarefas geradas) */
+.main-tabs{display:flex;background:var(--bg);border-bottom:1px solid var(--border)}
+.main-tab{flex:1;padding:11px;text-align:center;font-size:13px;font-weight:600;border:none;background:transparent;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;display:flex;align-items:center;justify-content:center;gap:6px}
+.main-tab.active{color:var(--blue-dark);border-bottom-color:var(--blue)}
+.main-tab .badge{background:var(--amber);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;min-width:18px}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* LOG FILTERS */
+.log-scroll{display:flex;gap:6px;padding:10px 12px;overflow-x:auto;background:var(--bg);border-bottom:1px solid var(--border)}
+.log-scroll::-webkit-scrollbar{display:none}
+.log-chip{flex-shrink:0;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--bg);cursor:pointer;color:var(--text2);transition:all .15s}
+.log-chip.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+/* TASKS */
+.tasks{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+
+.task-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px;transition:all .2s;position:relative;overflow:hidden}
+.task-card.done{opacity:.5}
+.task-card.done .task-name{text-decoration:line-through;color:var(--text2)}
+.task-card.flagged{border-color:var(--amber);background:#FFFBF3}
+.task-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue);opacity:0;transition:opacity .2s}
+.task-card.done::before{background:var(--green);opacity:1}
+.task-card.flagged::before{background:var(--amber);opacity:1}
+
+.task-top{display:flex;gap:10px;align-items:flex-start}
+.check-btn{width:26px;height:26px;border-radius:7px;border:2px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-top:2px;transition:all .2s;font-size:15px;color:transparent}
+.check-btn.done{background:var(--green);border-color:var(--green);color:#fff}
+.check-btn:active{transform:scale(.9)}
+
+.task-body{flex:1;min-width:0}
+.task-header{margin-bottom:6px}
+.task-sku{font-size:11px;color:var(--blue);font-weight:600;margin-bottom:2px}
+.task-name{font-size:14px;font-weight:500;color:var(--text);line-height:1.35}
+
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px}
+.chip{background:var(--bg2);border-radius:6px;padding:6px 8px}
+.chip-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px}
+.chip-val{font-size:12px;font-weight:500;color:var(--text)}
+
+.qty-strip{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.qty-strip span:first-child{font-size:12px;color:var(--text2)}
+.qty-strip span:last-child{font-size:22px;font-weight:700;color:var(--text)}
+
+.curva-pill{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle}
+.cA{background:var(--green-light);color:var(--green)}
+.cB{background:var(--amber-light);color:var(--amber)}
+.cC{background:var(--red-light);color:var(--red)}
+
+.flag-pill{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle;background:var(--amber-light);color:var(--amber)}
+
+/* ACTION ROW (flag button) */
+.action-row{display:flex;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.flag-btn{flex:1;padding:8px;border-radius:var(--radius);border:1px solid var(--amber);background:var(--amber-light);color:var(--amber);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px}
+.flag-btn:active{opacity:.7}
+.unflag-btn{flex:1;padding:8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px}
+.unflag-btn:active{opacity:.7}
+
+/* EMPTY */
+.empty{padding:40px 20px;text-align:center;color:var(--text3)}
+.empty i{font-size:44px;display:block;margin-bottom:10px;opacity:.3}
+.empty p{font-size:14px}
+
+/* TOAST */
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1a18;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:300;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* DONE SCREEN */
+.done-screen{display:none;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;gap:12px}
+.done-screen i{font-size:56px;color:var(--green)}
+.done-screen h2{font-size:20px;font-weight:600}
+.done-screen p{font-size:14px;color:var(--text2)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-wrap">
+  <div class="login-box">
+    <i class="ti ti-device-mobile"></i>
+    <h1>Lista de tarefas</h1>
+    <p>Digite seu usuário (mesmo login do bseller)</p>
+    <div class="login-err" id="login-err"></div>
+    <label>Usuário</label>
+    <input id="login-user" placeholder="Ex: jsilva" autocomplete="username">
+    <button onclick="fazerLogin()"><i class="ti ti-login"></i> Entrar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <div class="header">
+    <div class="header-top">
+      <h1><i class="ti ti-device-mobile"></i> Minhas tarefas</h1>
+      <div class="header-right">
+        <span class="user-pill"><i class="ti ti-user"></i> <span id="user-label"></span></span>
+        <button class="refresh-btn" onclick="refresh()" aria-label="Atualizar"><i class="ti ti-refresh"></i></button>
+        <button class="refresh-btn" onclick="logout()" aria-label="Sair"><i class="ti ti-logout"></i></button>
+      </div>
+    </div>
+    <div class="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-item"><div class="stat-val" id="s-total">0</div><div class="stat-label">Total</div></div>
+    <div class="stat-item"><div class="stat-val" id="s-done">0</div><div class="stat-label">Feitos</div></div>
+    <div class="stat-item"><div class="stat-val" id="s-pend">0</div><div class="stat-label">Restantes</div></div>
+    <div class="stat-item tarefas"><div class="stat-val" id="s-tarefas">0</div><div class="stat-label">Tarefas</div></div>
+  </div>
+
+  <div class="main-tabs">
+    <button class="main-tab active" onclick="setMainTab('pendentes')"><i class="ti ti-clipboard-list"></i> Lista</button>
+    <button class="main-tab" onclick="setMainTab('tarefas')"><i class="ti ti-flag"></i> Tarefas <span class="badge" id="tarefas-badge" style="display:none">0</span></button>
+  </div>
+
+  <div class="log-scroll" id="log-tabs"></div>
+
+  <div class="tab-content active" id="tab-pendentes">
+    <div class="tasks" id="tasks-container">
+      <div class="empty"><i class="ti ti-loader"></i><p>Carregando...</p></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-tarefas">
+    <div class="tasks" id="tarefas-container"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let username = null;
+let grupos = []; // [{id, nome, itens:[...]}]
+let activeLog = 'all';
+let mainTab = 'pendentes';
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ── AUTH ──────────────────────────────────────
+
+function mostrarLogin() {
+  document.getElementById('login-wrap').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+function mostrarApp() {
+  document.getElementById('login-wrap').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('user-label').textContent = username;
+  carregarItens();
+}
+
+async function fazerLogin() {
+  const u = document.getElementById('login-user').value.trim();
+  const errEl = document.getElementById('login-err');
+  errEl.style.display = 'none';
+  if (!u) { errEl.textContent = 'Informe seu usuário'; errEl.style.display='block'; return; }
+  try {
+    const r = await fetch('/api/coletor/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u }) });
+    const data = await r.json();
+    if (!r.ok) { errEl.textContent = data.erro || 'Erro ao entrar'; errEl.style.display='block'; return; }
+    username = data.username;
+    localStorage.setItem('coletor_user', username);
+    mostrarApp();
+  } catch (e) { errEl.textContent = 'Erro de conexão'; errEl.style.display='block'; }
+}
+
+function logout() {
+  localStorage.removeItem('coletor_user');
+  username = null;
+  mostrarLogin();
+}
+
+document.getElementById('login-user').addEventListener('keydown', e => { if (e.key==='Enter') fazerLogin(); });
+
+// ── DATA ──────────────────────────────────────
+
+async function carregarItens() {
+  if (!username) return;
+  const r = await fetch('/api/coletor/itens?usuario=' + encodeURIComponent(username));
+  grupos = await r.json();
+  renderLogTabs();
+  renderAll();
+}
+
+function todosItensFlat() {
+  return grupos.flatMap(g => g.itens);
+}
+
+function renderLogTabs() {
+  const itens = todosItensFlat().filter(x => !x.tarefa_gerada);
+  const logs = ['all', ...new Set(itens.map(x=>x.log).filter(Boolean))];
+  document.getElementById('log-tabs').innerHTML = logs.map(l =>
+    `<button class="log-chip${activeLog===l?' active':''}" onclick="setLog('${l}')">${l==='all'?'Todos':l}</button>`
+  ).join('');
+}
+
+function setLog(l) { activeLog = l; renderLogTabs(); renderAll(); }
+
+function setMainTab(tab) {
+  mainTab = tab;
+  document.querySelectorAll('.main-tab').forEach((b,i)=>b.classList.toggle('active', ['pendentes','tarefas'][i]===tab));
+  document.getElementById('tab-pendentes').classList.toggle('active', tab==='pendentes');
+  document.getElementById('tab-tarefas').classList.toggle('active', tab==='tarefas');
+  document.getElementById('log-tabs').style.display = tab==='pendentes' ? 'flex' : 'none';
+}
+
+function curvaClass(c) { if(c==='A') return 'cA'; if(c==='B') return 'cB'; return 'cC'; }
+
+function renderAll() {
+  const todos = todosItensFlat();
+  const pendentesLista = todos.filter(x => !x.tarefa_gerada);
+  const tarefas = todos.filter(x => x.tarefa_gerada);
+
+  const filtroLog = activeLog === 'all' ? pendentesLista : pendentesLista.filter(x => x.log === activeLog);
+  const done = filtroLog.filter(x=>x.feito).length;
+  const total = filtroLog.length;
+  const pct = total ? Math.round(done/total*100) : 0;
+
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-done').textContent = done;
+  document.getElementById('s-pend').textContent = total - done;
+  document.getElementById('s-tarefas').textContent = tarefas.length;
+  document.getElementById('prog').style.width = pct + '%';
+
+  const badge = document.getElementById('tarefas-badge');
+  if (tarefas.length) { badge.style.display='inline-block'; badge.textContent = tarefas.length; }
+  else { badge.style.display='none'; }
+
+  renderLista(filtroLog, done, total);
+  renderTarefas(tarefas);
+}
+
+function renderLista(lista, done, total) {
+  const container = document.getElementById('tasks-container');
+
+  if (!lista.length) {
+    container.innerHTML = '<div class="empty"><i class="ti ti-clipboard-x"></i><p>Nenhuma tarefa neste filtro.</p></div>';
+    return;
+  }
+
+  if (done === total && total > 0) {
+    container.innerHTML = `<div class="done-screen" style="display:flex"><i class="ti ti-circle-check"></i><h2>Tudo concluído!</h2><p>Todos os ${total} itens foram finalizados.</p></div>`;
+    return;
+  }
+
+  const sorted = [...lista].sort((a,b) => a.feito - b.feito);
+
+  container.innerHTML = sorted.map(x => `
+    <div class="task-card${x.feito?' done':''}" id="card-${x.id}">
+      <div class="task-top">
+        <div class="check-btn${x.feito?' done':''}" onclick="toggleFeito('${x.id}',${x.feito})" role="checkbox" aria-checked="${!!x.feito}" aria-label="Marcar como feito">
+          ${x.feito?'<i class="ti ti-check"></i>':''}
+        </div>
+        <div class="task-body">
+          <div class="task-header">
+            <div class="task-sku">${x.sku||''} ${x.ean?'· EAN '+x.ean:''} ${x.curva?`<span class="curva-pill ${curvaClass(x.curva)}">${x.curva}</span>`:''}</div>
+            <div class="task-name">${x.descricao||'—'}</div>
+          </div>
+          <div class="chips">
+            <div class="chip"><div class="chip-label">Origem</div><div class="chip-val">${x.local_origem||'—'}</div></div>
+            <div class="chip"><div class="chip-label">Destino</div><div class="chip-val">${x.local_destino&&x.local_destino!=='#N/A'?x.local_destino:'—'}</div></div>
+            <div class="chip"><div class="chip-label">LOG</div><div class="chip-val">${x.log||'—'}</div></div>
+            <div class="chip"><div class="chip-label">Resp.</div><div class="chip-val">${x.responsavel||'—'}</div></div>
+          </div>
+          <div class="qty-strip">
+            <span>Quantidade pedida</span>
+            <span>${x.qtd}</span>
+          </div>
+          <div class="action-row">
+            <button class="flag-btn" onclick="gerarTarefa('${x.id}')"><i class="ti ti-flag"></i> Gerar tarefa (sem estoque / local errado)</button>
+          </div>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function renderTarefas(tarefas) {
+  const container = document.getElementById('tarefas-container');
+  if (!tarefas.length) {
+    container.innerHTML = '<div class="empty"><i class="ti ti-flag-off"></i><p>Nenhuma tarefa gerada.</p></div>';
+    return;
+  }
+  container.innerHTML = tarefas.map(x => `
+    <div class="task-card flagged" id="card-${x.id}">
+      <div class="task-top">
+        <div class="check-btn${x.feito?' done':''}" onclick="toggleFeito('${x.id}',${x.feito})" role="checkbox" aria-checked="${!!x.feito}" aria-label="Marcar como feito">
+          ${x.feito?'<i class="ti ti-check"></i>':''}
+        </div>
+        <div class="task-body">
+          <div class="task-header">
+            <div class="task-sku">${x.sku||''} ${x.ean?'· EAN '+x.ean:''} ${x.curva?`<span class="curva-pill ${curvaClass(x.curva)}">${x.curva}</span>`:''}<span class="flag-pill"><i class="ti ti-flag"></i> Tarefa</span></div>
+            <div class="task-name">${x.descricao||'—'}</div>
+          </div>
+          <div class="chips">
+            <div class="chip"><div class="chip-label">Origem</div><div class="chip-val">${x.local_origem||'—'}</div></div>
+            <div class="chip"><div class="chip-label">Destino</div><div class="chip-val">${x.local_destino&&x.local_destino!=='#N/A'?x.local_destino:'—'}</div></div>
+            <div class="chip"><div class="chip-label">LOG</div><div class="chip-val">${x.log||'—'}</div></div>
+            <div class="chip"><div class="chip-label">Resp.</div><div class="chip-val">${x.responsavel||'—'}</div></div>
+          </div>
+          <div class="qty-strip">
+            <span>Quantidade pedida</span>
+            <span>${x.qtd}</span>
+          </div>
+          <div class="action-row">
+            <button class="unflag-btn" onclick="removerTarefa('${x.id}')"><i class="ti ti-arrow-back"></i> Voltar para a lista</button>
+          </div>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function toggleFeito(id, atual) {
+  const novoFeito = !atual;
+  await fetch('/api/itens/' + id + '/feito', {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ feito: novoFeito })
+  });
+  const item = todosItensFlat().find(x => x.id === id);
+  if (item) item.feito = novoFeito;
+  toast(novoFeito ? '✅ Item concluído!' : 'Item desmarcado');
+  renderAll();
+}
+
+async function gerarTarefa(id) {
+  await fetch('/api/itens/' + id + '/tarefa', {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ tarefa_gerada: true })
+  });
+  const item = todosItensFlat().find(x => x.id === id);
+  if (item) item.tarefa_gerada = true;
+  toast('🚩 Tarefa gerada — movida para a aba "Tarefas"');
+  renderLogTabs();
+  renderAll();
+}
+
+async function removerTarefa(id) {
+  await fetch('/api/itens/' + id + '/tarefa', {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ tarefa_gerada: false })
+  });
+  const item = todosItensFlat().find(x => x.id === id);
+  if (item) item.tarefa_gerada = false;
+  toast('Item voltou para a lista');
+  renderLogTabs();
+  renderAll();
+}
+
+async function refresh() {
+  await carregarItens();
+  toast('Atualizado');
+}
+
+// Auto-refresh a cada 30 segundos
+setInterval(carregarItens, 30000);
+
+// Restaura sessão salva
+const savedUser = localStorage.getItem('coletor_user');
+if (savedUser) { username = savedUser; mostrarApp(); } else { mostrarLogin(); }
+</script>
+</body>
+</html>

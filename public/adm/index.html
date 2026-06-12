@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADM — Listas de Tarefas</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#185FA5;--blue-dark:#0C447C;--blue-light:#E6F1FB;
+  --green:#3B6D11;--green-light:#EAF3DE;
+  --amber:#BA7517;--amber-light:#FAEEDA;
+  --red:#A32D2D;--red-light:#FCEBEB;
+  --gray:#F1EFE8;--border:#e0ddd6;
+  --text:#1a1a18;--text2:#666560;--text3:#999890;
+  --bg:#ffffff;--bg2:#f8f7f4;--bg3:#f1f0ec;
+  --radius:8px;--radius-lg:12px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg2);color:var(--text);min-height:100vh}
+
+/* LOGIN */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.login-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;width:100%;max-width:360px}
+.login-box h1{font-size:18px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.login-box p{font-size:13px;color:var(--text2);margin-bottom:20px}
+.login-box label{font-size:12px;font-weight:500;color:var(--text2);display:block;margin-bottom:4px}
+.login-box input{width:100%;padding:9px 12px;border-radius:var(--radius);border:1px solid var(--border);font-size:14px;margin-bottom:12px}
+.login-box input:focus{outline:none;border-color:var(--blue)}
+.login-err{font-size:13px;color:var(--red);margin-bottom:10px;display:none}
+.login-hint{font-size:12px;color:var(--text3);margin-top:14px;text-align:center}
+
+/* HEADER */
+.header{background:var(--blue);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header h1{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
+.header-right{display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);border:1px solid transparent;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
+.btn-white{background:#fff;color:var(--blue-dark);border-color:#fff}
+.btn-white:hover{background:#e8f0fb}
+.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn-primary:hover{background:var(--blue-dark)}
+.btn-ghost{background:transparent;color:var(--text2);border-color:var(--border)}
+.btn-ghost:hover{background:var(--bg3)}
+.btn-danger{background:transparent;color:var(--red);border-color:var(--border)}
+.btn-danger:hover{background:var(--red-light);border-color:var(--red)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn-green:hover{opacity:.9}
+
+/* TOP TABS */
+.top-tabs{display:flex;gap:4px;background:var(--bg);border-bottom:1px solid var(--border);padding:0 20px}
+.top-tab{padding:11px 16px;font-size:13px;font-weight:500;border:none;background:transparent;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent}
+.top-tab.active{color:var(--blue-dark);border-bottom-color:var(--blue)}
+.view{display:none}
+.view.active{display:block}
+
+/* LAYOUT */
+.main{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 92px)}
+
+/* SIDEBAR */
+.sidebar{background:var(--bg);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.sidebar-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sidebar-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em}
+.lista-item{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;position:relative}
+.lista-item:hover{background:var(--bg2)}
+.lista-item.active{background:var(--blue-light);border-left:3px solid var(--blue)}
+.lista-nome{font-size:14px;font-weight:500;color:var(--text);margin-bottom:3px;display:flex;align-items:center;gap:6px}
+.lista-meta{font-size:12px;color:var(--text3)}
+.pub-badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--green-light);color:var(--green)}
+.empty-sidebar{padding:20px 16px;font-size:13px;color:var(--text3);text-align:center}
+
+/* CONTENT */
+.content{padding:20px;display:flex;flex-direction:column;gap:16px}
+.placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text3)}
+.placeholder i{font-size:48px;opacity:.3}
+.placeholder p{font-size:15px}
+
+/* LISTA HEADER */
+.lista-head{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.lista-head-left h2{font-size:17px;font-weight:600;margin-bottom:4px}
+.lista-head-left p{font-size:13px;color:var(--text2)}
+.lista-head-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px}
+.stat-val{font-size:26px;font-weight:600;color:var(--text);margin-bottom:2px}
+.stat-label{font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+
+/* IMPORT BOX */
+.import-box{background:var(--bg);border:1.5px dashed var(--border);border-radius:var(--radius-lg);padding:18px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.import-box p{font-size:13px;color:var(--text2);flex:1;min-width:150px}
+.import-status{font-size:12px;color:var(--green);font-weight:500;margin-top:4px}
+
+/* FILTROS */
+.filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filtros input,.filtros select{padding:7px 12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg);font-size:13px;color:var(--text)}
+.filtros input{flex:1;min-width:160px}
+
+/* TABELA */
+.table-wrap{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.table-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.table-header span{font-size:13px;color:var(--text2);font-weight:500}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 14px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:var(--bg2)}
+td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg2)}
+.curva-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;display:inline-block}
+.cA{background:var(--green-light);color:var(--green)}
+.cB{background:var(--amber-light);color:var(--amber)}
+.cC{background:var(--red-light);color:var(--red)}
+.del-btn{background:none;border:none;cursor:pointer;color:var(--text3);padding:4px;border-radius:4px;font-size:16px}
+.del-btn:hover{color:var(--red);background:var(--red-light)}
+.user-tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--blue-light);color:var(--blue-dark)}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:16px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-grid .full{grid-column:1/-1}
+label{font-size:12px;font-weight:500;color:var(--text2);display:block;margin-bottom:4px}
+input,select{width:100%;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--border);font-size:13px;color:var(--text);background:var(--bg)}
+input:focus,select:focus{outline:none;border-color:var(--blue)}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;background:#1a1a18;color:#fff;padding:10px 18px;border-radius:var(--radius);font-size:13px;z-index:300;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+
+.empty-table{padding:32px;text-align:center;color:var(--text3);font-size:14px}
+.empty-table i{font-size:32px;display:block;margin-bottom:8px;opacity:.3}
+
+/* NOVA LISTA btn no sidebar */
+.nova-lista-btn{margin:12px;padding:8px;border-radius:var(--radius);border:1px dashed var(--border);background:transparent;font-size:13px;color:var(--text2);cursor:pointer;width:calc(100% - 24px);display:flex;align-items:center;justify-content:center;gap:6px}
+.nova-lista-btn:hover{background:var(--bg2);color:var(--blue)}
+
+/* USUARIOS VIEW */
+.users-wrap{padding:20px;max-width:760px}
+.papel-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.papel-adm{background:var(--blue-light);color:var(--blue-dark)}
+.papel-operador{background:var(--gray);color:var(--text2)}
+
+@media(max-width:700px){
+  .main{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .stats{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-wrap">
+  <div class="login-box">
+    <h1><i class="ti ti-clipboard-list"></i> Painel ADM</h1>
+    <p>Acesse com seu usuário e senha</p>
+    <div class="login-err" id="login-err"></div>
+    <label>Usuário</label>
+    <input id="login-user" autocomplete="username" placeholder="admin">
+    <label>Senha</label>
+    <input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••">
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="fazerLogin()"><i class="ti ti-login"></i> Entrar</button>
+    <p class="login-hint">Usuário padrão: <b>admin</b> / senha: <b>admin123</b><br>(altere depois em "Usuários")</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <div class="header">
+    <h1><i class="ti ti-clipboard-list"></i> Painel ADM</h1>
+    <div class="header-right">
+      <a href="/coletor" target="_blank" class="btn btn-white btn-sm"><i class="ti ti-device-mobile"></i> Ver coletor</a>
+      <button class="btn btn-white btn-sm" onclick="logout()"><i class="ti ti-logout"></i> Sair</button>
+    </div>
+  </div>
+
+  <div class="top-tabs">
+    <button class="top-tab active" onclick="switchView('listas')"><i class="ti ti-list-check"></i> Listas</button>
+    <button class="top-tab" onclick="switchView('usuarios')"><i class="ti ti-users"></i> Usuários</button>
+  </div>
+
+  <!-- VIEW LISTAS -->
+  <div class="view active" id="view-listas">
+    <div class="main">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">Listas</span>
+        </div>
+        <button class="nova-lista-btn" onclick="novaLista()"><i class="ti ti-plus"></i> Nova lista</button>
+        <div id="sidebar-listas"></div>
+      </div>
+
+      <div class="content" id="content">
+        <div class="placeholder">
+          <i class="ti ti-clipboard"></i>
+          <p>Selecione ou crie uma lista</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW USUARIOS -->
+  <div class="view" id="view-usuarios">
+    <div class="users-wrap">
+      <div class="lista-head" style="margin-bottom:16px">
+        <div class="lista-head-left">
+          <h2>Usuários do sistema</h2>
+          <p>Cadastre operadores (usuário do bseller) e administradores</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openUserModal()"><i class="ti ti-plus"></i> Novo usuário</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Usuário</th><th>Papel</th><th>Criado em</th><th></th></tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ADICIONAR ITEM -->
+<div class="modal-overlay" id="modal-item">
+  <div class="modal">
+    <h3>Adicionar item</h3>
+    <div class="form-grid">
+      <div><label>Código/SKU</label><input id="f-sku" placeholder="Ex: 230272"></div>
+      <div><label>EAN</label><input id="f-ean" placeholder="Ex: 7896590..."></div>
+      <div class="full"><label>Descrição</label><input id="f-desc" placeholder="Nome do produto"></div>
+      <div><label>Quantidade</label><input id="f-qtd" type="number" min="1" value="1"></div>
+      <div><label>Curva</label><select id="f-curva"><option value="">—</option><option>A</option><option>B</option><option>C</option><option>C+</option></select></div>
+      <div><label>Local origem</label><input id="f-local" placeholder="Ex: PP 001 166 05"></div>
+      <div><label>Local destino (picking)</label><input id="f-picking" placeholder="Ex: PPP 005 168 02"></div>
+      <div><label>LOG</label><select id="f-log"><option value="">—</option><option>LOG 1</option><option>LOG 2</option><option>LOG 3</option><option>LOG 4</option></select></div>
+      <div><label>Responsável</label><input id="f-nome" placeholder="Nome do colaborador"></div>
+      <div><label>Usuário (login coletor)</label><input id="f-usuario" placeholder="Usuário bseller"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarItem()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVA LISTA -->
+<div class="modal-overlay" id="modal-lista">
+  <div class="modal" style="max-width:360px">
+    <h3>Nova lista</h3>
+    <div style="margin-bottom:16px">
+      <label>Nome da lista</label>
+      <input id="f-lista-nome" placeholder="Ex: Ressuprimento 05/06">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-lista').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="criarLista()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USUÁRIO -->
+<div class="modal-overlay" id="modal-user">
+  <div class="modal" style="max-width:380px">
+    <h3>Novo usuário</h3>
+    <div style="margin-bottom:12px">
+      <label>Usuário (mesmo login do bseller)</label>
+      <input id="u-username" placeholder="Ex: jsilva">
+    </div>
+    <div style="margin-bottom:12px">
+      <label>Papel</label>
+      <select id="u-papel" onchange="togglePassField()">
+        <option value="operador">Operador</option>
+        <option value="adm">ADM</option>
+      </select>
+    </div>
+    <div style="margin-bottom:12px" id="u-pass-wrap">
+      <label>Senha <span id="u-pass-req" style="color:var(--red)">*</span></label>
+      <input id="u-senha" type="password" placeholder="Necessária apenas para ADM">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-user').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarUsuario()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="xlsx-input" accept=".xlsx,.xls" style="display:none">
+
+<script>
+const API = '';
+let listaAtual = null;
+let todosItens = [];
+
+async function api(path, opts={}) {
+  const r = await fetch(API + path, { headers: {'Content-Type':'application/json'}, credentials:'include', ...opts });
+  if (r.status === 401) { mostrarLogin(); throw new Error('Não autenticado'); }
+  return r.json();
+}
+
+function toast(msg, dur=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// ── AUTH ──────────────────────────────────────
+
+function mostrarLogin() {
+  document.getElementById('login-wrap').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+function mostrarApp() {
+  document.getElementById('login-wrap').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  carregarSidebar();
+}
+
+async function fazerLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const senha = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-err');
+  errEl.style.display = 'none';
+  try {
+    const r = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ username, senha }) });
+    const data = await r.json();
+    if (!r.ok) { errEl.textContent = data.erro || 'Erro ao entrar'; errEl.style.display='block'; return; }
+    mostrarApp();
+  } catch (e) { errEl.textContent = 'Erro de conexão'; errEl.style.display='block'; }
+}
+
+async function logout() {
+  await fetch('/api/logout', { method:'POST', credentials:'include' });
+  mostrarLogin();
+}
+
+async function checarSessao() {
+  const r = await fetch('/api/me', { credentials:'include' });
+  const data = await r.json();
+  if (data.logado) mostrarApp(); else mostrarLogin();
+}
+
+document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key==='Enter') fazerLogin(); });
+
+// ── TOP TABS ──────────────────────────────────
+
+function switchView(view) {
+  document.querySelectorAll('.top-tab').forEach((b,i)=>b.classList.toggle('active', ['listas','usuarios'][i]===view));
+  document.getElementById('view-listas').classList.toggle('active', view==='listas');
+  document.getElementById('view-usuarios').classList.toggle('active', view==='usuarios');
+  if (view === 'usuarios') carregarUsuarios();
+}
+
+// ── LISTAS ──────────────────────────────────
+
+async function carregarSidebar() {
+  const listas = await api('/api/listas');
+  const el = document.getElementById('sidebar-listas');
+  if (!listas.length) { el.innerHTML = '<div class="empty-sidebar">Nenhuma lista criada</div>'; return; }
+  el.innerHTML = listas.map(l => `
+    <div class="lista-item${listaAtual?.id===l.id?' active':''}" onclick="abrirLista('${l.id}')">
+      <div class="lista-nome">
+        ${l.nome}
+        ${l.publicado ? '<span class="pub-badge">PUBLICADA</span>' : ''}
+      </div>
+      <div class="lista-meta">${l.total} itens · ${l.feitos} feitos · ${new Date(l.criado_em).toLocaleDateString('pt-BR')}</div>
+    </div>`).join('');
+}
+
+function novaLista() {
+  document.getElementById('f-lista-nome').value = '';
+  document.getElementById('modal-lista').classList.add('open');
+  setTimeout(() => document.getElementById('f-lista-nome').focus(), 50);
+}
+
+async function criarLista() {
+  const nome = document.getElementById('f-lista-nome').value.trim();
+  if (!nome) { toast('Informe um nome para a lista'); return; }
+  const r = await api('/api/listas', { method:'POST', body: JSON.stringify({ nome }) });
+  document.getElementById('modal-lista').classList.remove('open');
+  await carregarSidebar();
+  abrirLista(r.id);
+}
+
+async function abrirLista(id) {
+  const lista = await api('/api/listas/' + id);
+  listaAtual = lista;
+  todosItens = lista.itens;
+  renderContent();
+  carregarSidebar();
+}
+
+async function deletarLista() {
+  if (!confirm('Excluir esta lista e todos os seus itens?')) return;
+  await api('/api/listas/' + listaAtual.id, { method: 'DELETE' });
+  listaAtual = null;
+  document.getElementById('content').innerHTML = '<div class="placeholder"><i class="ti ti-clipboard"></i><p>Selecione ou crie uma lista</p></div>';
+  carregarSidebar();
+}
+
+async function togglePublicar() {
+  const novo = !listaAtual.publicado;
+  await api('/api/listas/' + listaAtual.id + '/publicar', { method: 'PATCH', body: JSON.stringify({ publicado: novo }) });
+  listaAtual.publicado = novo;
+  toast(novo ? '✅ Lista publicada para o coletor!' : 'Lista despublicada');
+  renderContent();
+  carregarSidebar();
+}
+
+// ── ITENS ────────────────────────────────────
+
+function filtrar() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const lf = document.getElementById('filter-log').value;
+  const cf = document.getElementById('filter-curva').value;
+  return todosItens.filter(x => {
+    if (q && !x.sku.toLowerCase().includes(q) && !x.descricao.toLowerCase().includes(q) && !(x.usuario||'').toLowerCase().includes(q)) return false;
+    if (lf && x.log !== lf) return false;
+    if (cf && x.curva !== cf) return false;
+    return true;
+  });
+}
+
+function curvaClass(c) { if (c==='A') return 'cA'; if (c==='B') return 'cB'; return 'cC'; }
+
+function renderTabela() {
+  const itens = filtrar();
+  const feitos = todosItens.filter(x=>x.feito).length;
+  document.getElementById('stat-total').textContent = todosItens.length;
+  document.getElementById('stat-feitos').textContent = feitos;
+  document.getElementById('stat-pend').textContent = todosItens.length - feitos;
+  document.getElementById('count-label').textContent = itens.length + ' iten' + (itens.length===1?'':'s');
+  const tbody = document.getElementById('tbody');
+  if (!itens.length) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-table"><i class="ti ti-clipboard-x"></i>${todosItens.length?'Nenhum item para os filtros aplicados':'Nenhum item. Importe uma planilha ou adicione manualmente.'}</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = itens.map(x => `
+    <tr>
+      <td><strong>${x.sku||'—'}</strong></td>
+      <td style="max-width:200px">${x.descricao||'—'}</td>
+      <td>${x.ean||'—'}</td>
+      <td><strong>${x.qtd}</strong></td>
+      <td style="font-size:12px">${x.local_origem||'—'}</td>
+      <td style="font-size:12px">${x.local_destino&&x.local_destino!=='#N/A'?x.local_destino:'—'}</td>
+      <td>${x.curva?`<span class="curva-badge ${curvaClass(x.curva)}">${x.curva}</span>`:'—'}</td>
+      <td>${x.log||'—'}</td>
+      <td>${x.usuario?`<span class="user-tag">${x.usuario}</span>`:'—'}</td>
+      <td><button class="del-btn" onclick="deletarItem('${x.id}')" title="Excluir"><i class="ti ti-trash"></i></button></td>
+    </tr>`).join('');
+}
+
+async function deletarItem(id) {
+  await api('/api/itens/' + id, { method: 'DELETE' });
+  todosItens = todosItens.filter(x => x.id !== id);
+  renderTabela();
+  carregarSidebar();
+  toast('Item removido');
+}
+
+function openModal() {
+  ['f-sku','f-ean','f-desc','f-local','f-picking','f-nome','f-usuario'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-qtd').value='1';
+  document.getElementById('f-curva').value='';
+  document.getElementById('f-log').value='';
+  document.getElementById('modal-item').classList.add('open');
+}
+function closeModal() { document.getElementById('modal-item').classList.remove('open'); }
+
+async function salvarItem() {
+  const item = {
+    sku: document.getElementById('f-sku').value.trim(),
+    descricao: document.getElementById('f-desc').value.trim(),
+    ean: document.getElementById('f-ean').value.trim(),
+    qtd: document.getElementById('f-qtd').value || '1',
+    curva: document.getElementById('f-curva').value,
+    local_origem: document.getElementById('f-local').value.trim(),
+    local_destino: document.getElementById('f-picking').value.trim(),
+    log: document.getElementById('f-log').value,
+    responsavel: document.getElementById('f-nome').value.trim(),
+    usuario: document.getElementById('f-usuario').value.trim()
+  };
+  if (!item.sku && !item.descricao) { toast('Informe ao menos o código ou descrição'); return; }
+  const r = await api('/api/listas/' + listaAtual.id + '/itens', { method: 'POST', body: JSON.stringify(item) });
+  item.id = r.id; item.feito = 0;
+  todosItens.push(item);
+  closeModal();
+  renderTabela();
+  carregarSidebar();
+  toast('Item adicionado');
+}
+
+// ── IMPORTAR XLSX ─────────────────────────────
+
+document.getElementById('xlsx-input').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch(API + '/api/listas/' + listaAtual.id + '/importar', { method: 'POST', body: fd, credentials:'include' });
+  const data = await r.json();
+  if (data.erro) { toast('Erro: ' + data.erro); return; }
+  toast(`✅ ${data.importados} itens importados!`);
+  const lista = await api('/api/listas/' + listaAtual.id);
+  todosItens = lista.itens;
+  renderTabela();
+  carregarSidebar();
+  e.target.value = '';
+});
+
+// ── RENDER CONTENT ────────────────────────────
+
+function renderContent() {
+  const l = listaAtual;
+  document.getElementById('content').innerHTML = `
+    <div class="lista-head">
+      <div class="lista-head-left">
+        <h2>${l.nome}</h2>
+        <p>Criada em ${new Date(l.criado_em).toLocaleDateString('pt-BR')} · ${l.publicado?'<span style="color:var(--green);font-weight:500">Publicada para coletor</span>':'Não publicada'}</p>
+      </div>
+      <div class="lista-head-right">
+        <button class="btn btn-danger btn-sm" onclick="deletarLista()"><i class="ti ti-trash"></i> Excluir lista</button>
+        <button class="btn ${l.publicado?'btn-ghost':'btn-green'} btn-sm" onclick="togglePublicar()">
+          <i class="ti ti-${l.publicado?'eye-off':'send'}"></i> ${l.publicado?'Despublicar':'Publicar para coletor'}
+        </button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="stat-total">0</div><div class="stat-label">Total de itens</div></div>
+      <div class="stat"><div class="stat-val" id="stat-feitos" style="color:var(--green)">0</div><div class="stat-label">Feitos no coletor</div></div>
+      <div class="stat"><div class="stat-val" id="stat-pend" style="color:var(--amber)">0</div><div class="stat-label">Pendentes</div></div>
+    </div>
+
+    <div class="import-box">
+      <div>
+        <p>Importe uma planilha Excel para adicionar itens em massa. Inclua a coluna <b>Usuário</b> para vincular cada item ao operador do coletor.</p>
+        <div class="import-status" id="import-status"></div>
+      </div>
+      <label class="btn btn-ghost" for="xlsx-input" style="cursor:pointer"><i class="ti ti-upload"></i> Importar .xlsx</label>
+    </div>
+
+    <div class="filtros">
+      <input type="text" id="search" placeholder="Buscar por SKU, descrição ou usuário..." oninput="renderTabela()">
+      <select id="filter-log" onchange="renderTabela()">
+        <option value="">Todos os LOGs</option>
+        <option>LOG 1</option><option>LOG 2</option><option>LOG 3</option><option>LOG 4</option>
+      </select>
+      <select id="filter-curva" onchange="renderTabela()">
+        <option value="">Todas as curvas</option>
+        <option>A</option><option>B</option><option>C</option><option>C+</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="ti ti-plus"></i> Adicionar item</button>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <span id="count-label">0 itens</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th><th>Descrição</th><th>EAN</th><th>Qtd</th>
+              <th>Origem</th><th>Destino</th><th>Curva</th><th>LOG</th><th>Usuário</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>`;
+  renderTabela();
+}
+
+// ── USUÁRIOS ──────────────────────────────────
+
+let usuariosCache = [];
+
+async function carregarUsuarios() {
+  usuariosCache = await api('/api/usuarios');
+  const tbody = document.getElementById('users-tbody');
+  if (!usuariosCache.length) {
+    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-table"><i class="ti ti-users"></i>Nenhum usuário cadastrado</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = usuariosCache.map(u => `
+    <tr>
+      <td><strong>${u.username}</strong></td>
+      <td><span class="papel-badge papel-${u.papel}">${u.papel === 'adm' ? 'ADM' : 'Operador'}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${new Date(u.criado_em).toLocaleDateString('pt-BR')}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="resetarSenha('${u.id}','${u.username}')" title="Redefinir senha"><i class="ti ti-key"></i></button>
+        <button class="del-btn" onclick="excluirUsuario('${u.id}','${u.username}')" title="Excluir"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+function togglePassField() {
+  const papel = document.getElementById('u-papel').value;
+  document.getElementById('u-pass-req').style.display = papel === 'adm' ? 'inline' : 'none';
+  document.getElementById('u-senha').placeholder = papel === 'adm' ? 'Obrigatória para ADM' : 'Opcional (operador não usa senha)';
+}
+
+function openUserModal() {
+  document.getElementById('u-username').value = '';
+  document.getElementById('u-senha').value = '';
+  document.getElementById('u-papel').value = 'operador';
+  togglePassField();
+  document.getElementById('modal-user').classList.add('open');
+}
+
+async function salvarUsuario() {
+  const username = document.getElementById('u-username').value.trim();
+  const senha = document.getElementById('u-senha').value;
+  const papel = document.getElementById('u-papel').value;
+  if (!username) { toast('Informe o usuário'); return; }
+  if (papel === 'adm' && !senha) { toast('Senha é obrigatória para ADM'); return; }
+  const r = await api('/api/usuarios', { method:'POST', body: JSON.stringify({ username, senha, papel }) });
+  if (r.erro) { toast(r.erro); return; }
+  document.getElementById('modal-user').classList.remove('open');
+  toast('Usuário criado');
+  carregarUsuarios();
+}
+
+async function resetarSenha(id, username) {
+  const nova = prompt('Nova senha para ' + username + ':');
+  if (!nova) return;
+  await api('/api/usuarios/' + id, { method:'PATCH', body: JSON.stringify({ senha: nova }) });
+  toast('Senha atualizada');
+}
+
+async function excluirUsuario(id, username) {
+  if (!confirm('Excluir o usuário "' + username + '"?')) return;
+  await api('/api/usuarios/' + id, { method:'DELETE' });
+  toast('Usuário excluído');
+  carregarUsuarios();
+}
+
+checarSessao();
+</script>
+</body>
+</html>
