@@ -223,7 +223,7 @@ app.get('/api/listas/:id', autenticarAdm, async (req, res) => {
     const { rows } = await pool.query('SELECT * FROM listas WHERE id=$1', [req.params.id]);
     if (!rows.length) return res.status(404).json({ erro: 'Lista não encontrada' });
     const lista = rows[0];
-    const itens = await pool.query('SELECT * FROM itens WHERE lista_id=$1 ORDER BY log, sku', [req.params.id]);
+    const itens = await pool.query('SELECT * FROM itens WHERE lista_id=$1 ORDER BY local_origem, sku', [req.params.id]);
     lista.itens = itens.rows;
     res.json(lista);
   } catch (e) { res.status(500).json({ erro: e.message }); }
@@ -305,7 +305,7 @@ app.get('/api/coletor/itens', async (req, res) => {
     const resultado = [];
     for (const l of listas) {
       const { rows: itens } = await pool.query(
-        'SELECT * FROM itens WHERE lista_id=$1 AND usuario=$2 ORDER BY log, sku',
+        'SELECT * FROM itens WHERE lista_id=$1 AND usuario=$2 ORDER BY local_origem, sku',
         [l.id, usuario]
       );
       if (itens.length) resultado.push({ id: l.id, nome: l.nome, itens });
