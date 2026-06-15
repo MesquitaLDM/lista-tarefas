@@ -119,7 +119,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1a18;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:300;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* DONE SCREEN */
+/* MODAL LOCAIS ALTERNATIVOS */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:flex-end;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--bg);border-radius:16px 16px 0 0;padding:20px 16px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto}
+.modal-box h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px}
+.modal-box p{font-size:13px;color:var(--text2);margin-bottom:14px}
+.local-alt{background:var(--bg2);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
+.local-alt .lval{font-size:14px;font-weight:500;color:var(--text)}
+.local-alt .lqtd{font-size:12px;color:var(--text2)}
+.modal-actions{display:flex;gap:8px;margin-top:14px}
+.modal-actions button{flex:1;padding:11px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none}
+.btn-confirmar{background:var(--amber);color:#fff}
+.btn-cancelar{background:var(--bg3);color:var(--text2)}
 .done-screen{display:none;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;gap:12px}
 .done-screen i{font-size:56px;color:var(--green)}
 .done-screen h2{font-size:20px;font-weight:600}
@@ -177,6 +189,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <div class="tab-content" id="tab-tarefas">
     <div class="tasks" id="tarefas-container"></div>
+  </div>
+</div>
+
+<!-- MODAL LOCAIS ALTERNATIVOS -->
+<div class="modal-overlay" id="modal-locais">
+  <div class="modal-box">
+    <h3>Locais alternativos</h3>
+    <p id="modal-item-desc"></p>
+    <div id="modal-locais-lista"></div>
+    <div class="modal-actions">
+      <button class="btn-confirmar" onclick="fecharModal()"><i class="ti ti-check"></i> Entendido</button>
+    </div>
   </div>
 </div>
 
@@ -381,7 +405,50 @@ async function toggleFeito(id, atual) {
   renderAll();
 }
 
+let itemParaTarefa = null;
+
 async function gerarTarefa(id) {
+  const item = todosItensFlat().find(x => x.id === id);
+  if (!item) return;
+  itemParaTarefa = item;
+
+  // Gera a tarefa imediatamente
+  await _confirmarTarefa(id);
+
+  // Depois busca e exibe locais alternativos
+  try {
+    const r = await fetch('/api/locais-altos/' + encodeURIComponent(item.sku));
+    const locais = await r.json();
+
+    const listaEl = document.getElementById('modal-locais-lista');
+    const descEl = document.getElementById('modal-item-desc');
+    descEl.textContent = `SKU ${item.sku} — ${item.descricao}`;
+
+    if (locais.length) {
+      listaEl.innerHTML = locais.map(l => `
+        <div class="local-alt">
+          <div>
+            <div class="lval"><i class="ti ti-map-pin" aria-hidden="true"></i> ${l.local}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${l.descricao||''}</div>
+          </div>
+          <div class="lqtd">Qtd: <strong>${l.quantidade}</strong></div>
+        </div>`).join('');
+    } else {
+      listaEl.innerHTML = '<div style="text-align:center;padding:16px;font-size:13px;color:var(--text3)"><i class="ti ti-map-pin-off" style="display:block;font-size:28px;margin-bottom:6px"></i>Nenhum local alternativo encontrado para este SKU.</div>';
+    }
+
+    document.getElementById('modal-locais').classList.add('open');
+  } catch(e) {
+    // Se falhar a busca, ignora silenciosamente
+  }
+}
+
+function fecharModal() {
+  document.getElementById('modal-locais').classList.remove('open');
+  itemParaTarefa = null;
+}
+
+async function _confirmarTarefa(id) {
   await fetch('/api/itens/' + id + '/tarefa', {
     method: 'PATCH',
     headers: {'Content-Type':'application/json'},
