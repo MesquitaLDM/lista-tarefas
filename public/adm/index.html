@@ -291,6 +291,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 
 <div class="toast" id="toast"></div>
 <input type="file" id="xlsx-input" accept=".xlsx,.xls" style="display:none">
+<input type="file" id="qry-input" accept=".xlsx,.xls" style="display:none">
 
 <script>
 const API = '';
@@ -546,6 +547,14 @@ function renderContent() {
       <label class="btn btn-ghost" for="xlsx-input" style="cursor:pointer"><i class="ti ti-upload"></i> Importar .xlsx</label>
     </div>
 
+    <div class="import-box" style="border-color:#BA7517;background:#FFFBF3">
+      <div>
+        <p>Importe a <b>QRY de locais altos</b> para sugerir locais alternativos ao operador quando gerar uma tarefa.</p>
+        <div class="import-status" id="qry-status"></div>
+      </div>
+      <label class="btn btn-ghost" for="qry-input" style="cursor:pointer;border-color:#BA7517;color:#BA7517"><i class="ti ti-map-pin"></i> Importar QRY</label>
+    </div>
+
     <div class="filtros">
       <input type="text" id="search" placeholder="Buscar por SKU, descrição ou usuário..." oninput="renderTabela()">
       <select id="filter-log" onchange="renderTabela()">
@@ -641,6 +650,21 @@ async function excluirUsuario(id, username) {
   toast('Usuário excluído');
   carregarUsuarios();
 }
+
+document.getElementById('qry-input').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const statusEl = document.getElementById('qry-status');
+  if (statusEl) statusEl.textContent = 'Importando...';
+  const r = await fetch(API + '/api/locais-altos/importar', { method: 'POST', body: fd, credentials:'include' });
+  const data = await r.json();
+  if (data.erro) { toast('Erro: ' + data.erro); return; }
+  toast(`✅ QRY importada! ${data.importados} locais altos cadastrados.`);
+  if (statusEl) statusEl.textContent = `${data.importados} locais altos cadastrados`;
+  e.target.value = '';
+});
 
 checarSessao();
 </script>

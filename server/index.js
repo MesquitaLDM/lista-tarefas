@@ -65,6 +65,18 @@ async function initDb() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS locais_altos (
+      id TEXT PRIMARY KEY,
+      sku TEXT NOT NULL,
+      descricao TEXT,
+      local TEXT,
+      quantidade INTEGER DEFAULT 0,
+      atualizado_em TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_locais_altos_sku ON locais_altos(sku);`);
+
   // Cria um usuário admin padrão se não existir nenhum ADM
   const { rows } = await pool.query(`SELECT COUNT(*) FROM usuarios WHERE papel='adm'`);
   if (parseInt(rows[0].count) === 0) {
@@ -366,6 +378,71 @@ app.post('/api/listas/:id/importar', autenticarAdm, upload.single('file'), async
   } catch(e) {
     res.status(500).json({ erro: 'Erro ao processar planilha: ' + e.message });
   }
+});
+
+// ── LOCAIS ALTOS ─────────────────────────────────────────
+
+// Consultar locais alternativos por SKU (coletor)
+app.get('/api/locais-altos/:sku', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT local, descricao, quantidade FROM locais_altos WHERE sku=$1 ORDER BY quantidade DESC',
+      [req.params.sku]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Importar QRY de locais altos (ADM)
+app.post('/api/locais-altos/importar', autenticarAdm, upload.single('file'), async (req, res) => {
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    function getVal(row, keys) {
+      for (const k of keys) if (row[k] !== undefined && row[k] !== '') return String(row[k]).trim();
+      return '';
+    }
+
+    const mapSku = ['Item','item','SKU','Código','Codigo'];
+    const mapDesc = ['Descrição','Descricao','Descrição item','desc'];
+    const mapLocal = ['Descrição_2','Descricao_2','Local picking','Local','local'];
+    const mapQtd = ['Quantidade','quantidade','Qtd','qtd'];
+
+    const valid = data.filter(r => getVal(r, mapSku) && getVal(r, mapLocal));
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Limpa tabela antes de reimportar
+      await client.query('DELETE FROM locais_altos');
+      for (const r of valid) {
+        await client.query(
+          `INSERT INTO locais_altos (id, sku, descricao, local, quantidade) VALUES ($1,$2,$3,$4,$5)`,
+          [uuidv4(), getVal(r, mapSku), getVal(r, mapDesc), getVal(r, mapLocal), parseInt(getVal(r, mapQtd)) || 0]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    res.json({ importados: valid.length });
+  } catch(e) {
+    res.status(500).json({ erro: 'Erro ao processar QRY: ' + e.message });
+  }
+});
+
+// Total de locais altos cadastrados
+app.get('/api/locais-altos', autenticarAdm, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) as total, MAX(atualizado_em) as atualizado FROM locais_altos');
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
 // Rotas SPA
