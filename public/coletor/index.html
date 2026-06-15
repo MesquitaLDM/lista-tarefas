@@ -192,6 +192,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- MODAL CONFIRMAÇÃO DE TAREFA -->
+<div class="modal-overlay" id="modal-confirmar">
+  <div class="modal-box">
+    <h3>Gerar tarefa?</h3>
+    <p id="modal-confirmar-desc" style="margin-bottom:14px"></p>
+    <div style="background:var(--amber-light);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:14px">
+      <i class="ti ti-alert-triangle"></i> Use apenas quando o produto <strong>não está no local</strong> ou <strong>não há estoque</strong>.
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancelar" onclick="fecharModalConfirmar()">Cancelar</button>
+      <button class="btn-confirmar" onclick="confirmarGerarTarefa()"><i class="ti ti-flag"></i> Confirmar tarefa</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL LOCAIS ALTERNATIVOS -->
 <div class="modal-overlay" id="modal-locais">
   <div class="modal-box">
@@ -412,10 +427,25 @@ async function gerarTarefa(id) {
   if (!item) return;
   itemParaTarefa = item;
 
-  // Gera a tarefa imediatamente
-  await _confirmarTarefa(id);
+  // Mostra confirmação primeiro
+  document.getElementById('modal-confirmar-desc').textContent = `SKU ${item.sku} — ${item.descricao}`;
+  document.getElementById('modal-confirmar').classList.add('open');
+}
 
-  // Depois busca e exibe locais alternativos
+function fecharModalConfirmar() {
+  document.getElementById('modal-confirmar').classList.remove('open');
+  itemParaTarefa = null;
+}
+
+async function confirmarGerarTarefa() {
+  if (!itemParaTarefa) return;
+  const item = itemParaTarefa;
+  fecharModalConfirmar();
+
+  // Gera a tarefa
+  await _confirmarTarefa(item.id);
+
+  // Busca e exibe locais alternativos
   try {
     const r = await fetch('/api/locais-altos/' + encodeURIComponent(item.sku));
     const locais = await r.json();
@@ -442,13 +472,6 @@ async function gerarTarefa(id) {
     // Se falhar a busca, ignora silenciosamente
   }
 }
-
-function fecharModal() {
-  document.getElementById('modal-locais').classList.remove('open');
-  itemParaTarefa = null;
-}
-
-async function _confirmarTarefa(id) {
   await fetch('/api/itens/' + id + '/tarefa', {
     method: 'PATCH',
     headers: {'Content-Type':'application/json'},
