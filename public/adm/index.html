@@ -3,146 +3,151 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ADM — Listas de Tarefas</title>
+<title>ADM — Loja do Mecânico</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --blue:#185FA5;--blue-dark:#0C447C;--blue-light:#E6F1FB;
-  --green:#3B6D11;--green-light:#EAF3DE;
-  --amber:#BA7517;--amber-light:#FAEEDA;
-  --red:#A32D2D;--red-light:#FCEBEB;
-  --gray:#F1EFE8;--border:#e0ddd6;
-  --text:#1a1a18;--text2:#666560;--text3:#999890;
-  --bg:#ffffff;--bg2:#f8f7f4;--bg3:#f1f0ec;
+  --orange:#E8450A;--orange-dark:#C23A08;--orange-light:#2a1a10;
+  --green:#6DBF3E;--green-light:#1a2a10;
+  --red:#E84040;--red-light:#2a1010;
+  --amber:#F0A500;--amber-light:#2a2010;
+  --bg:#111111;--bg2:#181818;--bg3:#202020;--bg4:#2a2a2a;
+  --border:#2a2a2a;--border2:#333;
+  --text:#ffffff;--text2:#aaaaaa;--text3:#666666;
   --radius:8px;--radius-lg:12px;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg2);color:var(--text);min-height:100vh}
-
-/* LOGIN */
-.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-.login-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;width:100%;max-width:360px}
-.login-box h1{font-size:18px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px}
-.login-box p{font-size:13px;color:var(--text2);margin-bottom:20px}
-.login-box label{font-size:12px;font-weight:500;color:var(--text2);display:block;margin-bottom:4px}
-.login-box input{width:100%;padding:9px 12px;border-radius:var(--radius);border:1px solid var(--border);font-size:14px;margin-bottom:12px}
-.login-box input:focus{outline:none;border-color:var(--blue)}
-.login-err{font-size:13px;color:var(--red);margin-bottom:10px;display:none}
-.login-hint{font-size:12px;color:var(--text3);margin-top:14px;text-align:center}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
 /* HEADER */
-.header{background:var(--blue);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.header h1{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
+.header{background:#1a1a1a;border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-brand{display:flex;align-items:center;gap:10px}
+.header-brand .logo-icon{width:32px;height:32px;background:var(--orange);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff}
+.header-brand h1{font-size:15px;font-weight:700;color:var(--text)}
+.header-brand h1 span{color:var(--orange)}
+.header-brand small{display:block;font-size:10px;color:var(--text3);font-weight:400;text-transform:uppercase;letter-spacing:.08em}
 .header-right{display:flex;gap:8px;align-items:center}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);border:1px solid transparent;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
-.btn-white{background:#fff;color:var(--blue-dark);border-color:#fff}
-.btn-white:hover{background:#e8f0fb}
-.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue)}
-.btn-primary:hover{background:var(--blue-dark)}
-.btn-ghost{background:transparent;color:var(--text2);border-color:var(--border)}
-.btn-ghost:hover{background:var(--bg3)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--radius);border:1px solid transparent;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
+.btn-orange{background:var(--orange);color:#fff;border-color:var(--orange)}
+.btn-orange:hover{background:var(--orange-dark)}
+.btn-ghost{background:transparent;color:var(--text2);border-color:var(--border2)}
+.btn-ghost:hover{background:var(--bg3);color:var(--text)}
 .btn-danger{background:transparent;color:var(--red);border-color:var(--border)}
 .btn-danger:hover{background:var(--red-light);border-color:var(--red)}
-.btn-sm{padding:5px 10px;font-size:12px}
 .btn-green{background:var(--green);color:#fff;border-color:var(--green)}
-.btn-green:hover{opacity:.9}
+.btn-green:hover{opacity:.85}
+.btn-sm{padding:5px 10px;font-size:11px}
 
 /* TOP TABS */
-.top-tabs{display:flex;gap:4px;background:var(--bg);border-bottom:1px solid var(--border);padding:0 20px}
-.top-tab{padding:11px 16px;font-size:13px;font-weight:500;border:none;background:transparent;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent}
-.top-tab.active{color:var(--blue-dark);border-bottom-color:var(--blue)}
+.top-tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border)}
+.top-tab{padding:11px 18px;font-size:12px;font-weight:600;border:none;background:transparent;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:.06em;transition:all .15s}
+.top-tab.active{color:var(--orange);border-bottom-color:var(--orange)}
+.top-tab:hover{color:var(--text2)}
 .view{display:none}
 .view.active{display:block}
 
 /* LAYOUT */
-.main{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 92px)}
+.main{display:grid;grid-template-columns:260px 1fr;min-height:calc(100vh - 92px)}
 
 /* SIDEBAR */
-.sidebar{background:var(--bg);border-right:1px solid var(--border);display:flex;flex-direction:column}
-.sidebar-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.sidebar-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em}
-.lista-item{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;position:relative}
-.lista-item:hover{background:var(--bg2)}
-.lista-item.active{background:var(--blue-light);border-left:3px solid var(--blue)}
-.lista-nome{font-size:14px;font-weight:500;color:var(--text);margin-bottom:3px;display:flex;align-items:center;gap:6px}
-.lista-meta{font-size:12px;color:var(--text3)}
-.pub-badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--green-light);color:var(--green)}
-.empty-sidebar{padding:20px 16px;font-size:13px;color:var(--text3);text-align:center}
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.sidebar-header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sidebar-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em}
+.nova-lista-btn{margin:10px;padding:8px;border-radius:var(--radius);border:1px dashed var(--border2);background:transparent;font-size:12px;color:var(--text3);cursor:pointer;width:calc(100% - 20px);display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.nova-lista-btn:hover{border-color:var(--orange);color:var(--orange);background:var(--orange-light)}
+.lista-item{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.lista-item:hover{background:var(--bg3)}
+.lista-item.active{background:var(--orange-light);border-left:2px solid var(--orange)}
+.lista-nome{font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px;display:flex;align-items:center;gap:6px}
+.lista-meta{font-size:11px;color:var(--text3)}
+.pub-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;background:var(--green-light);color:var(--green);text-transform:uppercase}
+.empty-sidebar{padding:16px;font-size:12px;color:var(--text3);text-align:center}
 
 /* CONTENT */
-.content{padding:20px;display:flex;flex-direction:column;gap:16px}
-.placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text3)}
-.placeholder i{font-size:48px;opacity:.3}
-.placeholder p{font-size:15px}
+.content{padding:20px;display:flex;flex-direction:column;gap:14px;background:var(--bg)}
+.placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--text3)}
+.placeholder i{font-size:44px;opacity:.3}
+.placeholder p{font-size:14px}
 
-/* LISTA HEADER */
-.lista-head{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
-.lista-head-left h2{font-size:17px;font-weight:600;margin-bottom:4px}
-.lista-head-left p{font-size:13px;color:var(--text2)}
-.lista-head-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* CARDS */
+.card-row{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.card-row h2{font-size:16px;font-weight:700;margin-bottom:3px;color:var(--text)}
+.card-row p{font-size:12px;color:var(--text3)}
+.card-row-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
 /* STATS */
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.stat{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px}
-.stat-val{font-size:26px;font-weight:600;color:var(--text);margin-bottom:2px}
-.stat-label{font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px}
+.stat-val{font-size:28px;font-weight:700;margin-bottom:2px}
+.stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.07em}
 
 /* IMPORT BOX */
-.import-box{background:var(--bg);border:1.5px dashed var(--border);border-radius:var(--radius-lg);padding:18px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.import-box p{font-size:13px;color:var(--text2);flex:1;min-width:150px}
-.import-status{font-size:12px;color:var(--green);font-weight:500;margin-top:4px}
+.import-box{background:var(--bg2);border:1px dashed var(--border2);border-radius:var(--radius-lg);padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.import-box p{font-size:12px;color:var(--text3);flex:1;min-width:140px;line-height:1.5}
+.import-status{font-size:11px;color:var(--green);font-weight:500;margin-top:4px}
 
 /* FILTROS */
 .filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.filtros input,.filtros select{padding:7px 12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg);font-size:13px;color:var(--text)}
+.filtros input,.filtros select{padding:7px 10px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg3);font-size:12px;color:var(--text)}
 .filtros input{flex:1;min-width:160px}
+.filtros input::placeholder{color:var(--text3)}
 
 /* TABELA */
-.table-wrap{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
-.table-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.table-header span{font-size:13px;color:var(--text2);font-weight:500}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:10px 14px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:var(--bg2)}
-td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+.table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.table-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.table-header span{font-size:12px;color:var(--text3);font-weight:500}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:9px 12px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--border);background:var(--bg3)}
+td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:var(--bg2)}
-.curva-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;display:inline-block}
-.cA{background:var(--green-light);color:var(--green)}
-.cB{background:var(--amber-light);color:var(--amber)}
-.cC{background:var(--red-light);color:var(--red)}
-.del-btn{background:none;border:none;cursor:pointer;color:var(--text3);padding:4px;border-radius:4px;font-size:16px}
+tr:hover td{background:var(--bg3)}
+.curva-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;display:inline-block}
+.cA{background:#1a3a10;color:#6DBF3E}
+.cB{background:#2a2010;color:#F0A500}
+.cC{background:#2a1010;color:#E84040}
+.del-btn{background:none;border:none;cursor:pointer;color:var(--text3);padding:4px;border-radius:4px;font-size:15px}
 .del-btn:hover{color:var(--red);background:var(--red-light)}
-.user-tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--blue-light);color:var(--blue-dark)}
+.user-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:var(--orange-light);color:var(--orange)}
 
 /* MODAL */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
-.modal{background:var(--bg);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
-.modal h3{font-size:16px;font-weight:600;margin-bottom:16px}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:700;margin-bottom:16px;color:var(--text)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form-grid .full{grid-column:1/-1}
-label{font-size:12px;font-weight:500;color:var(--text2);display:block;margin-bottom:4px}
-input,select{width:100%;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--border);font-size:13px;color:var(--text);background:var(--bg)}
-input:focus,select:focus{outline:none;border-color:var(--blue)}
+label{font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+input,select{width:100%;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--border2);font-size:12px;color:var(--text);background:var(--bg3)}
+input:focus,select:focus{outline:none;border-color:var(--orange)}
 .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 
 /* TOAST */
-.toast{position:fixed;bottom:20px;right:20px;background:#1a1a18;color:#fff;padding:10px 18px;border-radius:var(--radius);font-size:13px;z-index:300;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);color:var(--text);border:1px solid var(--border2);padding:10px 18px;border-radius:var(--radius);font-size:12px;z-index:300;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
 
-.empty-table{padding:32px;text-align:center;color:var(--text3);font-size:14px}
-.empty-table i{font-size:32px;display:block;margin-bottom:8px;opacity:.3}
+.empty-table{padding:28px;text-align:center;color:var(--text3);font-size:13px}
+.empty-table i{font-size:28px;display:block;margin-bottom:8px;opacity:.3}
 
-/* NOVA LISTA btn no sidebar */
-.nova-lista-btn{margin:12px;padding:8px;border-radius:var(--radius);border:1px dashed var(--border);background:transparent;font-size:13px;color:var(--text2);cursor:pointer;width:calc(100% - 24px);display:flex;align-items:center;justify-content:center;gap:6px}
-.nova-lista-btn:hover{background:var(--bg2);color:var(--blue)}
+/* LOGIN */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);padding:20px}
+.login-box{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:30px;width:100%;max-width:360px}
+.login-logo{text-align:center;margin-bottom:20px}
+.login-logo .icon{width:52px;height:52px;background:var(--orange);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;margin:0 auto 10px}
+.login-logo h2{font-size:17px;font-weight:700;color:var(--text)}
+.login-logo h2 span{color:var(--orange)}
+.login-logo p{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-top:2px}
+.login-err{font-size:12px;color:var(--red);margin-bottom:10px;display:none;padding:8px 10px;background:var(--red-light);border-radius:var(--radius)}
+.login-hint{font-size:11px;color:var(--text3);margin-top:12px;text-align:center}
 
-/* USUARIOS VIEW */
+/* USERS VIEW */
 .users-wrap{padding:20px;max-width:760px}
-.papel-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
-.papel-adm{background:var(--blue-light);color:var(--blue-dark)}
-.papel-operador{background:var(--gray);color:var(--text2)}
+.papel-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;text-transform:uppercase}
+.papel-adm{background:var(--orange-light);color:var(--orange)}
+.papel-operador{background:var(--bg3);color:var(--text3)}
+
+/* DIVIDER */
+.section-divider{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;padding:4px 0 8px}
 
 @media(max-width:700px){
   .main{grid-template-columns:1fr}
@@ -156,25 +161,34 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
 <!-- LOGIN -->
 <div class="login-wrap" id="login-wrap">
   <div class="login-box">
-    <h1><i class="ti ti-clipboard-list"></i> Painel ADM</h1>
-    <p>Acesse com seu usuário e senha</p>
+    <div class="login-logo">
+      <div class="icon"><i class="ti ti-clipboard-list"></i></div>
+      <h2>Loja do <span>Mecânico</span></h2>
+      <p>Painel ADM — Tarefas</p>
+    </div>
     <div class="login-err" id="login-err"></div>
     <label>Usuário</label>
-    <input id="login-user" autocomplete="username" placeholder="admin">
+    <input id="login-user" autocomplete="username" placeholder="admin" style="margin-bottom:10px">
     <label>Senha</label>
-    <input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••">
-    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="fazerLogin()"><i class="ti ti-login"></i> Entrar</button>
-    <p class="login-hint">Usuário padrão: <b>admin</b> / senha: <b>admin123</b><br>(altere depois em "Usuários")</p>
+    <input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••" style="margin-bottom:14px">
+    <button class="btn btn-orange" style="width:100%;justify-content:center;padding:10px" onclick="fazerLogin()"><i class="ti ti-login"></i> Entrar</button>
+    <p class="login-hint">Usuário padrão: <b>admin</b> / senha: <b>admin123</b></p>
   </div>
 </div>
 
 <!-- APP -->
 <div id="app" style="display:none">
   <div class="header">
-    <h1><i class="ti ti-clipboard-list"></i> Painel ADM</h1>
+    <div class="header-brand">
+      <div class="logo-icon"><i class="ti ti-clipboard-list"></i></div>
+      <div>
+        <h1>Loja do <span>Mecânico</span></h1>
+        <small>Painel de Tarefas — ADM</small>
+      </div>
+    </div>
     <div class="header-right">
-      <a href="/coletor" target="_blank" class="btn btn-white btn-sm"><i class="ti ti-device-mobile"></i> Ver coletor</a>
-      <button class="btn btn-white btn-sm" onclick="logout()"><i class="ti ti-logout"></i> Sair</button>
+      <a href="/coletor" target="_blank" class="btn btn-ghost btn-sm"><i class="ti ti-device-mobile"></i> Ver coletor</a>
+      <button class="btn btn-ghost btn-sm" onclick="logout()"><i class="ti ti-logout"></i> Sair</button>
     </div>
   </div>
 
@@ -193,7 +207,6 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
         <button class="nova-lista-btn" onclick="novaLista()"><i class="ti ti-plus"></i> Nova lista</button>
         <div id="sidebar-listas"></div>
       </div>
-
       <div class="content" id="content">
         <div class="placeholder">
           <i class="ti ti-clipboard"></i>
@@ -206,18 +219,16 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   <!-- VIEW USUARIOS -->
   <div class="view" id="view-usuarios">
     <div class="users-wrap">
-      <div class="lista-head" style="margin-bottom:16px">
-        <div class="lista-head-left">
+      <div class="card-row" style="margin-bottom:14px">
+        <div>
           <h2>Usuários do sistema</h2>
-          <p>Cadastre operadores (usuário do bseller) e administradores</p>
+          <p>Operadores (usuário bseller) e administradores</p>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="openUserModal()"><i class="ti ti-plus"></i> Novo usuário</button>
+        <button class="btn btn-orange btn-sm" onclick="openUserModal()"><i class="ti ti-plus"></i> Novo usuário</button>
       </div>
       <div class="table-wrap">
         <table>
-          <thead>
-            <tr><th>Usuário</th><th>Papel</th><th>Criado em</th><th></th></tr>
-          </thead>
+          <thead><tr><th>Usuário</th><th>Papel</th><th>Criado em</th><th></th></tr></thead>
           <tbody id="users-tbody"></tbody>
         </table>
       </div>
@@ -225,7 +236,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
   </div>
 </div>
 
-<!-- MODAL ADICIONAR ITEM -->
+<!-- MODAL ITEM -->
 <div class="modal-overlay" id="modal-item">
   <div class="modal">
     <h3>Adicionar item</h3>
@@ -236,14 +247,14 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
       <div><label>Quantidade</label><input id="f-qtd" type="number" min="1" value="1"></div>
       <div><label>Curva</label><select id="f-curva"><option value="">—</option><option>A</option><option>B</option><option>C</option><option>C+</option></select></div>
       <div><label>Local origem</label><input id="f-local" placeholder="Ex: PP 001 166 05"></div>
-      <div><label>Local destino (picking)</label><input id="f-picking" placeholder="Ex: PPP 005 168 02"></div>
-      <div><label>LOG</label><select id="f-log"><option value="">—</option><option>LOG 1</option><option>LOG 2</option><option>LOG 3</option><option>LOG 4</option></select></div>
+      <div><label>Local destino</label><input id="f-picking" placeholder="Ex: PPP 005 168 02"></div>
+      <div><label>LOG</label><select id="f-log"><option value="">—</option><option>LOG 1</option><option>LOG 2</option><option>LOG 3</option><option>LOG 4</option><option>LOG 5</option><option>LOG 6</option><option>LOG 6M</option></select></div>
       <div><label>Responsável</label><input id="f-nome" placeholder="Nome do colaborador"></div>
       <div><label>Usuário (login coletor)</label><input id="f-usuario" placeholder="Usuário bseller"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="salvarItem()"><i class="ti ti-check"></i> Salvar</button>
+      <button class="btn btn-orange" onclick="salvarItem()"><i class="ti ti-check"></i> Salvar</button>
     </div>
   </div>
 </div>
@@ -258,7 +269,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="document.getElementById('modal-lista').classList.remove('open')">Cancelar</button>
-      <button class="btn btn-primary" onclick="criarLista()">Criar</button>
+      <button class="btn btn-orange" onclick="criarLista()">Criar</button>
     </div>
   </div>
 </div>
@@ -269,7 +280,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
     <h3>Novo usuário</h3>
     <div style="margin-bottom:12px">
       <label>Usuário (mesmo login do bseller)</label>
-      <input id="u-username" placeholder="Ex: jsilva">
+      <input id="u-username" placeholder="Ex: mECA_jsilva">
     </div>
     <div style="margin-bottom:12px">
       <label>Papel</label>
@@ -284,7 +295,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue)}
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="document.getElementById('modal-user').classList.remove('open')">Cancelar</button>
-      <button class="btn btn-primary" onclick="salvarUsuario()">Salvar</button>
+      <button class="btn btn-orange" onclick="salvarUsuario()">Salvar</button>
     </div>
   </div>
 </div>
@@ -310,8 +321,6 @@ function toast(msg, dur=2500) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), dur);
 }
-
-// ── AUTH ──────────────────────────────────────
 
 function mostrarLogin() {
   document.getElementById('login-wrap').style.display = 'flex';
@@ -349,8 +358,6 @@ async function checarSessao() {
 
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key==='Enter') fazerLogin(); });
 
-// ── TOP TABS ──────────────────────────────────
-
 function switchView(view) {
   document.querySelectorAll('.top-tab').forEach((b,i)=>b.classList.toggle('active', ['listas','usuarios'][i]===view));
   document.getElementById('view-listas').classList.toggle('active', view==='listas');
@@ -358,18 +365,13 @@ function switchView(view) {
   if (view === 'usuarios') carregarUsuarios();
 }
 
-// ── LISTAS ──────────────────────────────────
-
 async function carregarSidebar() {
   const listas = await api('/api/listas');
   const el = document.getElementById('sidebar-listas');
   if (!listas.length) { el.innerHTML = '<div class="empty-sidebar">Nenhuma lista criada</div>'; return; }
   el.innerHTML = listas.map(l => `
     <div class="lista-item${listaAtual?.id===l.id?' active':''}" onclick="abrirLista('${l.id}')">
-      <div class="lista-nome">
-        ${l.nome}
-        ${l.publicado ? '<span class="pub-badge">PUBLICADA</span>' : ''}
-      </div>
+      <div class="lista-nome">${l.nome}${l.publicado?'<span class="pub-badge">✓ Live</span>':''}</div>
       <div class="lista-meta">${l.total} itens · ${l.feitos} feitos · ${new Date(l.criado_em).toLocaleDateString('pt-BR')}</div>
     </div>`).join('');
 }
@@ -414,8 +416,6 @@ async function togglePublicar() {
   carregarSidebar();
 }
 
-// ── ITENS ────────────────────────────────────
-
 function filtrar() {
   const q = document.getElementById('search').value.toLowerCase();
   const lf = document.getElementById('filter-log').value;
@@ -444,16 +444,16 @@ function renderTabela() {
   }
   tbody.innerHTML = itens.map(x => `
     <tr>
-      <td><strong>${x.sku||'—'}</strong></td>
-      <td style="max-width:200px">${x.descricao||'—'}</td>
-      <td>${x.ean||'—'}</td>
-      <td><strong>${x.qtd}</strong></td>
-      <td style="font-size:12px">${x.local_origem||'—'}</td>
-      <td style="font-size:12px">${x.local_destino&&x.local_destino!=='#N/A'?x.local_destino:'—'}</td>
+      <td style="color:var(--orange);font-weight:600">${x.sku||'—'}</td>
+      <td style="max-width:180px;color:var(--text2)">${x.descricao||'—'}</td>
+      <td style="color:var(--text3)">${x.ean||'—'}</td>
+      <td style="font-weight:700">${x.qtd}</td>
+      <td style="font-size:11px;color:var(--text2)">${x.local_origem||'—'}</td>
+      <td style="font-size:11px;color:var(--text2)">${x.local_destino&&x.local_destino!=='#N/A'?x.local_destino:'—'}</td>
       <td>${x.curva?`<span class="curva-badge ${curvaClass(x.curva)}">${x.curva}</span>`:'—'}</td>
-      <td>${x.log||'—'}</td>
+      <td style="color:var(--text3)">${x.log||'—'}</td>
       <td>${x.usuario?`<span class="user-tag">${x.usuario}</span>`:'—'}</td>
-      <td><button class="del-btn" onclick="deletarItem('${x.id}')" title="Excluir"><i class="ti ti-trash"></i></button></td>
+      <td><button class="del-btn" onclick="deletarItem('${x.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>`).join('');
 }
 
@@ -497,8 +497,6 @@ async function salvarItem() {
   toast('Item adicionado');
 }
 
-// ── IMPORTAR XLSX ─────────────────────────────
-
 document.getElementById('xlsx-input').addEventListener('change', async function(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -515,18 +513,30 @@ document.getElementById('xlsx-input').addEventListener('change', async function(
   e.target.value = '';
 });
 
-// ── RENDER CONTENT ────────────────────────────
+document.getElementById('qry-input').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch(API + '/api/locais-altos/importar', { method: 'POST', body: fd, credentials:'include' });
+  const data = await r.json();
+  if (data.erro) { toast('Erro: ' + data.erro); return; }
+  toast(`✅ QRY importada! ${data.importados} locais altos cadastrados.`);
+  document.getElementById('qry-status').textContent = `${data.importados} locais cadastrados`;
+  e.target.value = '';
+});
 
 function renderContent() {
   const l = listaAtual;
+  const feitos = todosItens.filter(x=>x.feito).length;
   document.getElementById('content').innerHTML = `
-    <div class="lista-head">
-      <div class="lista-head-left">
+    <div class="card-row">
+      <div>
         <h2>${l.nome}</h2>
-        <p>Criada em ${new Date(l.criado_em).toLocaleDateString('pt-BR')} · ${l.publicado?'<span style="color:var(--green);font-weight:500">Publicada para coletor</span>':'Não publicada'}</p>
+        <p>Criada em ${new Date(l.criado_em).toLocaleDateString('pt-BR')} · ${l.publicado?'<span style="color:var(--green);font-weight:600">● Publicada</span>':'<span style="color:var(--text3)">● Não publicada</span>'}</p>
       </div>
-      <div class="lista-head-right">
-        <button class="btn btn-danger btn-sm" onclick="deletarLista()"><i class="ti ti-trash"></i> Excluir lista</button>
+      <div class="card-row-right">
+        <button class="btn btn-danger btn-sm" onclick="deletarLista()"><i class="ti ti-trash"></i> Excluir</button>
         <button class="btn ${l.publicado?'btn-ghost':'btn-green'} btn-sm" onclick="togglePublicar()">
           <i class="ti ti-${l.publicado?'eye-off':'send'}"></i> ${l.publicado?'Despublicar':'Publicar para coletor'}
         </button>
@@ -534,52 +544,45 @@ function renderContent() {
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="stat-val" id="stat-total">0</div><div class="stat-label">Total de itens</div></div>
-      <div class="stat"><div class="stat-val" id="stat-feitos" style="color:var(--green)">0</div><div class="stat-label">Feitos no coletor</div></div>
+      <div class="stat"><div class="stat-val" id="stat-total" style="color:var(--text)">0</div><div class="stat-label">Total de itens</div></div>
+      <div class="stat"><div class="stat-val" id="stat-feitos" style="color:var(--green)">0</div><div class="stat-label">Feitos</div></div>
       <div class="stat"><div class="stat-val" id="stat-pend" style="color:var(--amber)">0</div><div class="stat-label">Pendentes</div></div>
     </div>
 
-    <div class="import-box">
-      <div>
-        <p>Importe uma planilha Excel para adicionar itens em massa. Inclua a coluna <b>Usuário</b> para vincular cada item ao operador do coletor.</p>
-        <div class="import-status" id="import-status"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div class="import-box" style="flex:1;min-width:220px">
+        <div>
+          <p>Importe uma planilha <b>.xlsx</b> com coluna <b>Usuário</b> para vincular ao operador.</p>
+        </div>
+        <label class="btn btn-ghost btn-sm" for="xlsx-input" style="cursor:pointer;white-space:nowrap"><i class="ti ti-upload"></i> Importar lista</label>
       </div>
-      <label class="btn btn-ghost" for="xlsx-input" style="cursor:pointer"><i class="ti ti-upload"></i> Importar .xlsx</label>
-    </div>
-
-    <div class="import-box" style="border-color:#BA7517;background:#FFFBF3">
-      <div>
-        <p>Importe a <b>QRY de locais altos</b> para sugerir locais alternativos ao operador quando gerar uma tarefa.</p>
-        <div class="import-status" id="qry-status"></div>
+      <div class="import-box" style="flex:1;min-width:220px;border-color:var(--orange);background:var(--orange-light)">
+        <div>
+          <p>Importe a <b>QRY de locais altos</b> para sugerir locais alternativos.</p>
+          <div class="import-status" id="qry-status"></div>
+        </div>
+        <label class="btn btn-sm" for="qry-input" style="cursor:pointer;white-space:nowrap;border-color:var(--orange);color:var(--orange);background:transparent"><i class="ti ti-map-pin"></i> Importar QRY</label>
       </div>
-      <label class="btn btn-ghost" for="qry-input" style="cursor:pointer;border-color:#BA7517;color:#BA7517"><i class="ti ti-map-pin"></i> Importar QRY</label>
     </div>
 
     <div class="filtros">
       <input type="text" id="search" placeholder="Buscar por SKU, descrição ou usuário..." oninput="renderTabela()">
       <select id="filter-log" onchange="renderTabela()">
         <option value="">Todos os LOGs</option>
-        <option>LOG 1</option><option>LOG 2</option><option>LOG 3</option><option>LOG 4</option>
+        <option>LOG 1</option><option>LOG 2</option><option>LOG 3</option><option>LOG 4</option><option>LOG 5</option><option>LOG 6</option><option>LOG 6M</option>
       </select>
       <select id="filter-curva" onchange="renderTabela()">
         <option value="">Todas as curvas</option>
         <option>A</option><option>B</option><option>C</option><option>C+</option>
       </select>
-      <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="ti ti-plus"></i> Adicionar item</button>
+      <button class="btn btn-orange btn-sm" onclick="openModal()"><i class="ti ti-plus"></i> Adicionar item</button>
     </div>
 
     <div class="table-wrap">
-      <div class="table-header">
-        <span id="count-label">0 itens</span>
-      </div>
+      <div class="table-header"><span id="count-label">0 itens</span></div>
       <div style="overflow-x:auto">
         <table>
-          <thead>
-            <tr>
-              <th>SKU</th><th>Descrição</th><th>EAN</th><th>Qtd</th>
-              <th>Origem</th><th>Destino</th><th>Curva</th><th>LOG</th><th>Usuário</th><th></th>
-            </tr>
-          </thead>
+          <thead><tr><th>SKU</th><th>Descrição</th><th>EAN</th><th>Qtd</th><th>Origem</th><th>Destino</th><th>Curva</th><th>LOG</th><th>Usuário</th><th></th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
@@ -587,39 +590,33 @@ function renderContent() {
   renderTabela();
 }
 
-// ── USUÁRIOS ──────────────────────────────────
-
-let usuariosCache = [];
-
+// USUÁRIOS
 async function carregarUsuarios() {
-  usuariosCache = await api('/api/usuarios');
+  const usuarios = await api('/api/usuarios');
   const tbody = document.getElementById('users-tbody');
-  if (!usuariosCache.length) {
-    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-table"><i class="ti ti-users"></i>Nenhum usuário cadastrado</div></td></tr>';
-    return;
-  }
-  tbody.innerHTML = usuariosCache.map(u => `
+  if (!usuarios.length) { tbody.innerHTML = '<tr><td colspan="4"><div class="empty-table"><i class="ti ti-users"></i>Nenhum usuário cadastrado</div></td></tr>'; return; }
+  tbody.innerHTML = usuarios.map(u => `
     <tr>
-      <td><strong>${u.username}</strong></td>
-      <td><span class="papel-badge papel-${u.papel}">${u.papel === 'adm' ? 'ADM' : 'Operador'}</span></td>
-      <td style="font-size:12px;color:var(--text2)">${new Date(u.criado_em).toLocaleDateString('pt-BR')}</td>
+      <td style="font-weight:600;color:var(--orange)">${u.username}</td>
+      <td><span class="papel-badge papel-${u.papel}">${u.papel==='adm'?'ADM':'Operador'}</span></td>
+      <td style="font-size:11px;color:var(--text3)">${new Date(u.criado_em).toLocaleDateString('pt-BR')}</td>
       <td>
-        <button class="btn btn-ghost btn-sm" onclick="resetarSenha('${u.id}','${u.username}')" title="Redefinir senha"><i class="ti ti-key"></i></button>
-        <button class="del-btn" onclick="excluirUsuario('${u.id}','${u.username}')" title="Excluir"><i class="ti ti-trash"></i></button>
+        <button class="btn btn-ghost btn-sm" onclick="resetarSenha('${u.id}','${u.username}')"><i class="ti ti-key"></i></button>
+        <button class="del-btn" onclick="excluirUsuario('${u.id}','${u.username}')"><i class="ti ti-trash"></i></button>
       </td>
     </tr>`).join('');
 }
 
 function togglePassField() {
   const papel = document.getElementById('u-papel').value;
-  document.getElementById('u-pass-req').style.display = papel === 'adm' ? 'inline' : 'none';
-  document.getElementById('u-senha').placeholder = papel === 'adm' ? 'Obrigatória para ADM' : 'Opcional (operador não usa senha)';
+  document.getElementById('u-pass-req').style.display = papel==='adm'?'inline':'none';
+  document.getElementById('u-senha').placeholder = papel==='adm'?'Obrigatória para ADM':'Opcional';
 }
 
 function openUserModal() {
-  document.getElementById('u-username').value = '';
-  document.getElementById('u-senha').value = '';
-  document.getElementById('u-papel').value = 'operador';
+  document.getElementById('u-username').value='';
+  document.getElementById('u-senha').value='';
+  document.getElementById('u-papel').value='operador';
   togglePassField();
   document.getElementById('modal-user').classList.add('open');
 }
@@ -629,7 +626,7 @@ async function salvarUsuario() {
   const senha = document.getElementById('u-senha').value;
   const papel = document.getElementById('u-papel').value;
   if (!username) { toast('Informe o usuário'); return; }
-  if (papel === 'adm' && !senha) { toast('Senha é obrigatória para ADM'); return; }
+  if (papel==='adm'&&!senha) { toast('Senha é obrigatória para ADM'); return; }
   const r = await api('/api/usuarios', { method:'POST', body: JSON.stringify({ username, senha, papel }) });
   if (r.erro) { toast(r.erro); return; }
   document.getElementById('modal-user').classList.remove('open');
@@ -650,21 +647,6 @@ async function excluirUsuario(id, username) {
   toast('Usuário excluído');
   carregarUsuarios();
 }
-
-document.getElementById('qry-input').addEventListener('change', async function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const fd = new FormData();
-  fd.append('file', file);
-  const statusEl = document.getElementById('qry-status');
-  if (statusEl) statusEl.textContent = 'Importando...';
-  const r = await fetch(API + '/api/locais-altos/importar', { method: 'POST', body: fd, credentials:'include' });
-  const data = await r.json();
-  if (data.erro) { toast('Erro: ' + data.erro); return; }
-  toast(`✅ QRY importada! ${data.importados} locais altos cadastrados.`);
-  if (statusEl) statusEl.textContent = `${data.importados} locais altos cadastrados`;
-  e.target.value = '';
-});
 
 checarSessao();
 </script>
