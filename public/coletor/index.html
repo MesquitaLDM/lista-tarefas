@@ -188,12 +188,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="stat-item"><div class="stat-val" id="s-total">0</div><div class="stat-label">Total</div></div>
     <div class="stat-item"><div class="stat-val" id="s-done" style="color:var(--green)">0</div><div class="stat-label">Feitos</div></div>
     <div class="stat-item"><div class="stat-val" id="s-pend" style="color:var(--amber)">0</div><div class="stat-label">Restantes</div></div>
-    <div class="stat-item tarefas"><div class="stat-val" id="s-tarefas">0</div><div class="stat-label">Tarefas</div></div>
+    <div class="stat-item tarefas"><div class="stat-val" id="s-tarefas">0</div><div class="stat-label">Derrubadas</div></div>
   </div>
 
   <div class="main-tabs">
     <button class="main-tab active" onclick="setMainTab('pendentes')"><i class="ti ti-clipboard-list"></i> Lista</button>
-    <button class="main-tab" onclick="setMainTab('tarefas')"><i class="ti ti-flag"></i> Tarefas <span class="badge" id="tarefas-badge" style="display:none">0</span></button>
+    <button class="main-tab" onclick="setMainTab('tarefas')"><i class="ti ti-flag"></i> Derrubadas <span class="badge" id="tarefas-badge" style="display:none">0</span></button>
   </div>
 
   <div class="log-scroll" id="log-tabs"></div>
@@ -212,12 +212,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <!-- MODAL CONFIRMAÇÃO -->
 <div class="modal-overlay" id="modal-confirmar">
   <div class="modal-box">
-    <h3>Gerar tarefa?</h3>
+    <h3>Gerar derrubada?</h3>
     <p class="sub" id="modal-confirmar-desc"></p>
     <div class="modal-alert"><i class="ti ti-alert-triangle"></i> Use apenas quando o produto <strong>não está no local</strong> ou <strong>não há estoque disponível</strong>.</div>
     <div class="modal-actions">
       <button class="btn-cancelar" onclick="fecharModalConfirmar()">Cancelar</button>
-      <button class="btn-confirmar" onclick="confirmarGerarTarefa()"><i class="ti ti-flag"></i> Confirmar</button>
+      <button class="btn-confirmar" onclick="confirmarGerarDerrubada()"><i class="ti ti-flag"></i> Confirmar</button>
     </div>
   </div>
 </div>
@@ -331,12 +331,12 @@ function renderAll() {
   badge.textContent = tarefas.length;
 
   renderLista(filtro, done, total);
-  renderTarefas(tarefas);
+  renderDerrubadas(tarefas);
 }
 
 function renderLista(lista, done, total) {
   const container = document.getElementById('tasks-container');
-  if (!lista.length) { container.innerHTML = '<div class="empty"><i class="ti ti-clipboard-x"></i><p>Nenhuma tarefa neste filtro.</p></div>'; return; }
+  if (!lista.length) { container.innerHTML = '<div class="empty"><i class="ti ti-clipboard-x"></i><p>Nenhuma derrubada neste filtro.</p></div>'; return; }
   if (done === total && total > 0) {
     container.innerHTML = `<div class="done-screen"><i class="ti ti-circle-check"></i><h2>Tudo concluído!</h2><p>Todos os ${total} itens foram finalizados.</p></div>`;
     return;
@@ -358,15 +358,15 @@ function renderLista(lista, done, total) {
             <div class="chip"><div class="cl">Resp.</div><div class="cv">${x.responsavel||'—'}</div></div>
           </div>
           <div class="qty-row"><span class="ql">Quantidade pedida</span><span class="qv">${x.qtd}</span></div>
-          ${!x.feito?`<button class="flag-btn" onclick="gerarTarefa('${x.id}')"><i class="ti ti-flag"></i> Gerar tarefa (sem estoque / local errado)</button>`:''}
+          ${!x.feito?`<button class="flag-btn" onclick="gerarDerrubada('${x.id}')"><i class="ti ti-flag"></i> Gerar derrubada (sem estoque / local errado)</button>`:''}
         </div>
       </div>
     </div>`).join('');
 }
 
-function renderTarefas(tarefas) {
+function renderDerrubadas(tarefas) {
   const container = document.getElementById('tarefas-container');
-  if (!tarefas.length) { container.innerHTML = '<div class="empty"><i class="ti ti-flag-off"></i><p>Nenhuma tarefa gerada.</p></div>'; return; }
+  if (!tarefas.length) { container.innerHTML = '<div class="empty"><i class="ti ti-flag-off"></i><p>Nenhuma derrubada gerada.</p></div>'; return; }
   container.innerHTML = tarefas.map(x => `
     <div class="task-card flagged">
       <div class="task-top">
@@ -374,14 +374,14 @@ function renderTarefas(tarefas) {
           ${x.feito?'<i class="ti ti-check"></i>':''}
         </div>
         <div class="task-body">
-          <div class="task-sku">${x.sku||''} ${x.curva?`<span class="curva-pill ${curvaClass(x.curva)}">${x.curva}</span>`:''} <span class="flag-pill"><i class="ti ti-flag"></i> Tarefa</span></div>
+          <div class="task-sku">${x.sku||''} ${x.curva?`<span class="curva-pill ${curvaClass(x.curva)}">${x.curva}</span>`:''} <span class="flag-pill"><i class="ti ti-flag"></i> Derrubada</span></div>
           <div class="task-name">${x.descricao||'—'}</div>
           <div class="chips">
             <div class="chip"><div class="cl">Origem</div><div class="cv">${x.local_origem||'—'}</div></div>
             <div class="chip"><div class="cl">Destino</div><div class="cv">${x.local_destino&&x.local_destino!=='#N/A'?x.local_destino:'—'}</div></div>
           </div>
           <div class="qty-row"><span class="ql">Quantidade pedida</span><span class="qv">${x.qtd}</span></div>
-          <button class="unflag-btn" onclick="removerTarefa('${x.id}')"><i class="ti ti-arrow-back"></i> Voltar para a lista</button>
+          <button class="unflag-btn" onclick="removerDerrubada('${x.id}')"><i class="ti ti-arrow-back"></i> Voltar para a lista</button>
         </div>
       </div>
     </div>`).join('');
@@ -396,26 +396,26 @@ async function toggleFeito(id, atual) {
   renderAll();
 }
 
-let itemParaTarefa = null;
+let itemParaDerrubada = null;
 
-async function gerarTarefa(id) {
+async function gerarDerrubada(id) {
   const item = todosItensFlat().find(x => x.id === id);
   if (!item) return;
-  itemParaTarefa = item;
+  itemParaDerrubada = item;
   document.getElementById('modal-confirmar-desc').textContent = `SKU ${item.sku} — ${item.descricao}`;
   document.getElementById('modal-confirmar').classList.add('open');
 }
 
 function fecharModalConfirmar() {
   document.getElementById('modal-confirmar').classList.remove('open');
-  itemParaTarefa = null;
+  itemParaDerrubada = null;
 }
 
-async function confirmarGerarTarefa() {
-  if (!itemParaTarefa) return;
-  const item = itemParaTarefa;
+async function confirmarGerarDerrubada() {
+  if (!itemParaDerrubada) return;
+  const item = itemParaDerrubada;
   fecharModalConfirmar();
-  await _confirmarTarefa(item.id);
+  await _confirmarDerrubada(item.id);
   try {
     const r = await fetch('/api/locais-altos/' + encodeURIComponent(item.sku));
     const locais = await r.json();
@@ -441,17 +441,17 @@ function fecharModalLocais() {
   document.getElementById('modal-locais').classList.remove('open');
 }
 
-async function _confirmarTarefa(id) {
-  await fetch('/api/itens/' + id + '/tarefa', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tarefa_gerada: true }) });
+async function _confirmarDerrubada(id) {
+  await fetch('/api/itens/' + id + '/derrubada', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tarefa_gerada: true }) });
   const item = todosItensFlat().find(x=>x.id===id);
   if (item) item.tarefa_gerada = true;
-  toast('🚩 Tarefa gerada!');
+  toast('🚩 Derrubada gerada!');
   renderLogTabs();
   renderAll();
 }
 
-async function removerTarefa(id) {
-  await fetch('/api/itens/' + id + '/tarefa', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tarefa_gerada: false }) });
+async function removerDerrubada(id) {
+  await fetch('/api/itens/' + id + '/derrubada', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tarefa_gerada: false }) });
   const item = todosItensFlat().find(x=>x.id===id);
   if (item) item.tarefa_gerada = false;
   toast('Item voltou para a lista');
