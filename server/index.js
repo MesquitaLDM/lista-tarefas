@@ -450,6 +450,8 @@ app.get('/adm', (req, res) => res.sendFile(path.join(__dirname, '../public/adm/i
 app.get('/adm/*', (req, res) => res.sendFile(path.join(__dirname, '../public/adm/index.html')));
 app.get('/coletor', (req, res) => res.sendFile(path.join(__dirname, '../public/coletor/index.html')));
 app.get('/coletor/*', (req, res) => res.sendFile(path.join(__dirname, '../public/coletor/index.html')));
+app.get('/curva-abc', (req, res) => res.sendFile(path.join(__dirname, '../public/curva-abc/index.html')));
+app.get('/curva-abc/*', (req, res) => res.sendFile(path.join(__dirname, '../public/curva-abc/index.html')));
 
 initDb().then(() => {
   app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
