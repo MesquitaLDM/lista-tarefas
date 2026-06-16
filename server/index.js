@@ -76,6 +76,7 @@ async function initDb() {
     );
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_locais_altos_sku ON locais_altos(sku);`);
+  await pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS acessos TEXT DEFAULT '[]';`);
 
   // Cria um usuário admin padrão se não existir nenhum ADM
   const { rows } = await pool.query(`SELECT COUNT(*) FROM usuarios WHERE papel='adm'`);
@@ -157,7 +158,25 @@ app.post('/api/coletor/login', async (req, res) => {
     if (!username) return res.status(400).json({ erro: 'Informe o usuário' });
     const { rows } = await pool.query('SELECT * FROM usuarios WHERE username=$1', [username.trim()]);
     if (!rows.length) return res.status(401).json({ erro: 'Usuário não encontrado' });
-    res.json({ ok: true, username: rows[0].username, papel: rows[0].papel });
+    const u = rows[0];
+    let acessos = [];
+    try { acessos = JSON.parse(u.acessos || '[]'); } catch(e) {}
+    res.json({ ok: true, username: u.username, papel: u.papel, acessos });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Verificar acesso do usuário a um setor específico
+app.get('/api/coletor/acesso/:setor', async (req, res) => {
+  try {
+    const { usuario } = req.query;
+    if (!usuario) return res.status(400).json({ erro: 'Informe o usuário' });
+    const { rows } = await pool.query('SELECT acessos, papel FROM usuarios WHERE username=$1', [usuario]);
+    if (!rows.length) return res.json({ permitido: false });
+    const u = rows[0];
+    if (u.papel === 'adm') return res.json({ permitido: true }); // ADM acessa tudo
+    let acessos = [];
+    try { acessos = JSON.parse(u.acessos || '[]'); } catch(e) {}
+    res.json({ permitido: acessos.includes(req.params.setor) });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
@@ -165,19 +184,21 @@ app.post('/api/coletor/login', async (req, res) => {
 
 app.get('/api/usuarios', autenticarAdm, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, username, papel, criado_em FROM usuarios ORDER BY criado_em DESC');
+    const { rows } = await pool.query('SELECT id, username, papel, acessos, criado_em FROM usuarios ORDER BY criado_em DESC');
+    rows.forEach(u => { try { u.acessos = JSON.parse(u.acessos||'[]'); } catch(e) { u.acessos = []; } });
     res.json(rows);
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
 app.post('/api/usuarios', autenticarAdm, async (req, res) => {
   try {
-    const { username, senha, papel } = req.body;
+    const { username, senha, papel, acessos } = req.body;
     if (!username || !papel) return res.status(400).json({ erro: 'Usuário e papel são obrigatórios' });
     if (papel === 'adm' && !senha) return res.status(400).json({ erro: 'Senha é obrigatória para usuários ADM' });
     const id = uuidv4();
     const hash = senha ? await bcrypt.hash(senha, 10) : null;
-    await pool.query('INSERT INTO usuarios (id, username, senha_hash, papel) VALUES ($1,$2,$3,$4)', [id, username.trim(), hash, papel]);
+    const acessosStr = JSON.stringify(acessos || []);
+    await pool.query('INSERT INTO usuarios (id, username, senha_hash, papel, acessos) VALUES ($1,$2,$3,$4,$5)', [id, username.trim(), hash, papel, acessosStr]);
     res.json({ id });
   } catch (e) {
     if (e.code === '23505') return res.status(400).json({ erro: 'Esse usuário já existe' });
@@ -187,14 +208,13 @@ app.post('/api/usuarios', autenticarAdm, async (req, res) => {
 
 app.patch('/api/usuarios/:id', autenticarAdm, async (req, res) => {
   try {
-    const { senha, papel } = req.body;
+    const { senha, papel, acessos } = req.body;
     if (senha) {
       const hash = await bcrypt.hash(senha, 10);
       await pool.query('UPDATE usuarios SET senha_hash=$1 WHERE id=$2', [hash, req.params.id]);
     }
-    if (papel) {
-      await pool.query('UPDATE usuarios SET papel=$1 WHERE id=$2', [papel, req.params.id]);
-    }
+    if (papel) await pool.query('UPDATE usuarios SET papel=$1 WHERE id=$2', [papel, req.params.id]);
+    if (acessos !== undefined) await pool.query('UPDATE usuarios SET acessos=$1 WHERE id=$2', [JSON.stringify(acessos), req.params.id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
@@ -452,6 +472,9 @@ app.get('/coletor', (req, res) => res.sendFile(path.join(__dirname, '../public/c
 app.get('/coletor/*', (req, res) => res.sendFile(path.join(__dirname, '../public/coletor/index.html')));
 app.get('/curva-abc', (req, res) => res.sendFile(path.join(__dirname, '../public/curva-abc/index.html')));
 app.get('/curva-abc/*', (req, res) => res.sendFile(path.join(__dirname, '../public/curva-abc/index.html')));
+app.get('/armazenagem', (req, res) => res.sendFile(path.join(__dirname, '../public/armazenagem/index.html')));
+app.get('/faturamento', (req, res) => res.sendFile(path.join(__dirname, '../public/faturamento/index.html')));
+app.get('/expedicao', (req, res) => res.sendFile(path.join(__dirname, '../public/expedicao/index.html')));
 
 initDb().then(() => {
   app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));

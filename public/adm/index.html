@@ -228,7 +228,7 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Usuário</th><th>Papel</th><th>Criado em</th><th></th></tr></thead>
+          <thead><tr><th>Usuário</th><th>Papel</th><th>Acessos</th><th>Criado em</th><th></th></tr></thead>
           <tbody id="users-tbody"></tbody>
         </table>
       </div>
@@ -276,8 +276,8 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
 
 <!-- MODAL USUÁRIO -->
 <div class="modal-overlay" id="modal-user">
-  <div class="modal" style="max-width:380px">
-    <h3>Novo usuário</h3>
+  <div class="modal" style="max-width:400px">
+    <h3 id="modal-user-title">Novo usuário</h3>
     <div style="margin-bottom:12px">
       <label>Usuário (mesmo login do bseller)</label>
       <input id="u-username" placeholder="Ex: mECA_jsilva">
@@ -289,13 +289,30 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
         <option value="adm">ADM</option>
       </select>
     </div>
-    <div style="margin-bottom:12px" id="u-pass-wrap">
+    <div style="margin-bottom:14px" id="u-pass-wrap">
       <label>Senha <span id="u-pass-req" style="color:var(--red)">*</span></label>
       <input id="u-senha" type="password" placeholder="Necessária apenas para ADM">
     </div>
+    <div style="margin-bottom:14px" id="u-acessos-wrap">
+      <label style="margin-bottom:8px;display:block">Acessos por setor</label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text);text-transform:none;letter-spacing:0;font-weight:400">
+          <input type="checkbox" id="ac-armazenagem" style="width:16px;height:16px;accent-color:var(--orange)">
+          <i class="ti ti-building-warehouse" style="color:var(--orange)"></i> Armazenagem
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text);text-transform:none;letter-spacing:0;font-weight:400">
+          <input type="checkbox" id="ac-faturamento" style="width:16px;height:16px;accent-color:var(--orange)">
+          <i class="ti ti-receipt" style="color:#6DBF3E"></i> Faturamento
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text);text-transform:none;letter-spacing:0;font-weight:400">
+          <input type="checkbox" id="ac-expedicao" style="width:16px;height:16px;accent-color:var(--orange)">
+          <i class="ti ti-truck-delivery" style="color:#4A9EE8"></i> Expedição
+        </label>
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="document.getElementById('modal-user').classList.remove('open')">Cancelar</button>
-      <button class="btn btn-orange" onclick="salvarUsuario()">Salvar</button>
+      <button class="btn btn-orange" id="u-save-btn" onclick="salvarUsuario()">Salvar</button>
     </div>
   </div>
 </div>
@@ -591,17 +608,22 @@ function renderContent() {
 }
 
 // USUÁRIOS
+let editandoUserId = null;
+
 async function carregarUsuarios() {
   const usuarios = await api('/api/usuarios');
   const tbody = document.getElementById('users-tbody');
-  if (!usuarios.length) { tbody.innerHTML = '<tr><td colspan="4"><div class="empty-table"><i class="ti ti-users"></i>Nenhum usuário cadastrado</div></td></tr>'; return; }
+  if (!usuarios.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty-table"><i class="ti ti-users"></i>Nenhum usuário cadastrado</div></td></tr>'; return; }
+  const setorIcon = { armazenagem: '<i class="ti ti-building-warehouse" title="Armazenagem" style="color:var(--orange)"></i>', faturamento: '<i class="ti ti-receipt" title="Faturamento" style="color:#6DBF3E"></i>', expedicao: '<i class="ti ti-truck-delivery" title="Expedição" style="color:#4A9EE8"></i>' };
   tbody.innerHTML = usuarios.map(u => `
     <tr>
       <td style="font-weight:600;color:var(--orange)">${u.username}</td>
       <td><span class="papel-badge papel-${u.papel}">${u.papel==='adm'?'ADM':'Operador'}</span></td>
+      <td style="font-size:12px">${u.papel==='adm'?'<span style="color:var(--text3)">Acesso total</span>':(u.acessos||[]).map(a=>setorIcon[a]||a).join(' ')||'<span style="color:var(--text3)">Nenhum</span>'}</td>
       <td style="font-size:11px;color:var(--text3)">${new Date(u.criado_em).toLocaleDateString('pt-BR')}</td>
-      <td>
-        <button class="btn btn-ghost btn-sm" onclick="resetarSenha('${u.id}','${u.username}')"><i class="ti ti-key"></i></button>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-sm" onclick='editarUsuario("${u.id}","${u.username}","${u.papel}",${JSON.stringify(JSON.stringify(u.acessos||[]))})' title="Editar"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-ghost btn-sm" onclick="resetarSenha('${u.id}','${u.username}')" title="Redefinir senha"><i class="ti ti-key"></i></button>
         <button class="del-btn" onclick="excluirUsuario('${u.id}','${u.username}')"><i class="ti ti-trash"></i></button>
       </td>
     </tr>`).join('');
@@ -611,12 +633,33 @@ function togglePassField() {
   const papel = document.getElementById('u-papel').value;
   document.getElementById('u-pass-req').style.display = papel==='adm'?'inline':'none';
   document.getElementById('u-senha').placeholder = papel==='adm'?'Obrigatória para ADM':'Opcional';
+  document.getElementById('u-acessos-wrap').style.display = papel==='adm'?'none':'block';
 }
 
 function openUserModal() {
-  document.getElementById('u-username').value='';
-  document.getElementById('u-senha').value='';
-  document.getElementById('u-papel').value='operador';
+  editandoUserId = null;
+  document.getElementById('modal-user-title').textContent = 'Novo usuário';
+  document.getElementById('u-save-btn').textContent = 'Criar';
+  document.getElementById('u-username').value = '';
+  document.getElementById('u-username').disabled = false;
+  document.getElementById('u-senha').value = '';
+  document.getElementById('u-papel').value = 'operador';
+  ['armazenagem','faturamento','expedicao'].forEach(s => document.getElementById('ac-'+s).checked = false);
+  togglePassField();
+  document.getElementById('modal-user').classList.add('open');
+}
+
+function editarUsuario(id, username, papel, acessosJson) {
+  editandoUserId = id;
+  document.getElementById('modal-user-title').textContent = 'Editar acesso — ' + username;
+  document.getElementById('u-save-btn').textContent = 'Salvar';
+  document.getElementById('u-username').value = username;
+  document.getElementById('u-username').disabled = true;
+  document.getElementById('u-senha').value = '';
+  document.getElementById('u-papel').value = papel;
+  let acessos = [];
+  try { acessos = JSON.parse(acessosJson); } catch(e) {}
+  ['armazenagem','faturamento','expedicao'].forEach(s => document.getElementById('ac-'+s).checked = acessos.includes(s));
   togglePassField();
   document.getElementById('modal-user').classList.add('open');
 }
@@ -625,12 +668,21 @@ async function salvarUsuario() {
   const username = document.getElementById('u-username').value.trim();
   const senha = document.getElementById('u-senha').value;
   const papel = document.getElementById('u-papel').value;
-  if (!username) { toast('Informe o usuário'); return; }
-  if (papel==='adm'&&!senha) { toast('Senha é obrigatória para ADM'); return; }
-  const r = await api('/api/usuarios', { method:'POST', body: JSON.stringify({ username, senha, papel }) });
-  if (r.erro) { toast(r.erro); return; }
+  const acessos = ['armazenagem','faturamento','expedicao'].filter(s => document.getElementById('ac-'+s).checked);
+  if (!editandoUserId && !username) { toast('Informe o usuário'); return; }
+  if (papel==='adm' && !senha && !editandoUserId) { toast('Senha é obrigatória para ADM'); return; }
+  if (editandoUserId) {
+    const body = { papel, acessos };
+    if (senha) body.senha = senha;
+    const r = await api('/api/usuarios/' + editandoUserId, { method:'PATCH', body: JSON.stringify(body) });
+    if (r.erro) { toast(r.erro); return; }
+    toast('Usuário atualizado');
+  } else {
+    const r = await api('/api/usuarios', { method:'POST', body: JSON.stringify({ username, senha, papel, acessos }) });
+    if (r.erro) { toast(r.erro); return; }
+    toast('Usuário criado');
+  }
   document.getElementById('modal-user').classList.remove('open');
-  toast('Usuário criado');
   carregarUsuarios();
 }
 
