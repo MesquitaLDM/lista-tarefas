@@ -472,6 +472,8 @@ async function confirmarGerarTarefa() {
     // Se falhar a busca, ignora silenciosamente
   }
 }
+
+async function _confirmarTarefa(id) {
   await fetch('/api/itens/' + id + '/tarefa', {
     method: 'PATCH',
     headers: {'Content-Type':'application/json'},
