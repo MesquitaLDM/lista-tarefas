@@ -629,19 +629,10 @@ app.get('/api/expedicao/coletor', async (req, res) => {
 });
 
 // Flegar / desflegar pedido (ADM)
-app.patch('/api/expedicao/pedidos/:id/flegar', autenticarAdm, async (req, res) => {
-  try {
-    const { flagado } = req.body;
-    await pool.query('UPDATE expedicao_pedidos SET flagado=$1 WHERE id=$2', [!!flagado, req.params.id]);
-    res.json({ ok: true });
-  } catch(e) { res.status(500).json({ erro: e.message }); }
-});
-
-// Flegar todos de uma vez (ADM)
+// Flegar todos de uma vez (ADM) — DEVE vir ANTES de /:id/flegar
 app.patch('/api/expedicao/pedidos/flegar-todos', autenticarAdm, async (req, res) => {
   try {
     const { flagado, prazo } = req.body;
-    // prazo pode ser: 'atrasado', 'limite', 'D+1', 'adiantado', ou null (todos)
     if (prazo) {
       const hoje = new Date(); hoje.setHours(0,0,0,0);
       const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1);
@@ -664,6 +655,15 @@ app.patch('/api/expedicao/pedidos/flegar-todos', autenticarAdm, async (req, res)
     }
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
+
+app.patch('/api/expedicao/pedidos/:id/flegar', autenticarAdm, async (req, res) => {
+  try {
+    const { flagado } = req.body;
+    await pool.query('UPDATE expedicao_pedidos SET flagado=$1 WHERE id=$2', [!!flagado, req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 app.patch('/api/expedicao/pedidos/:id/concluir', async (req, res) => {
   try {
     const { concluido, usuario } = req.body;
