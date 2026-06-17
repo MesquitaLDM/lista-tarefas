@@ -195,6 +195,7 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
   <div class="top-tabs">
     <button class="top-tab active" onclick="switchView('listas')"><i class="ti ti-list-check"></i> Listas</button>
     <button class="top-tab" onclick="switchView('usuarios')"><i class="ti ti-users"></i> Usuários</button>
+    <button class="top-tab" onclick="switchView('expedicao')" id="tab-expedicao"><i class="ti ti-truck-delivery"></i> Expedição</button>
   </div>
 
   <!-- VIEW LISTAS -->
@@ -234,7 +235,32 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
       </div>
     </div>
   </div>
+
+  <!-- VIEW EXPEDIÇÃO -->
+  <div class="view" id="view-expedicao">
+    <div class="users-wrap" style="max-width:900px">
+      <div class="card-row" style="margin-bottom:14px">
+        <div>
+          <h2>Expedição — NFs para Inclusão</h2>
+          <p>Importe a QRY 180 para carregar os pedidos com "Nota Fiscal Aceita"</p>
+        </div>
+        <label class="btn btn-orange btn-sm" for="qry180-input" style="cursor:pointer"><i class="ti ti-upload"></i> Importar QRY 180</label>
+      </div>
+      <div id="exp-status" style="font-size:12px;color:var(--green);margin-bottom:12px;display:none"></div>
+      <div class="table-wrap">
+        <div class="table-header"><span id="exp-count">0 pedidos</span></div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Entrega</th><th>Ped. Cliente</th><th>Data Limite</th><th>Transportadora</th><th>Mega Rota</th><th>UF</th><th>Itens</th><th>Operador</th><th>Status</th></tr></thead>
+            <tbody id="exp-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+
+<input type="file" id="qry180-input" accept=".xlsx,.xls" style="display:none">
 
 <!-- MODAL ITEM -->
 <div class="modal-overlay" id="modal-item">
@@ -357,12 +383,16 @@ const PAPEL_LABEL = {
 function isAdmCentral() { return papelAtual === 'adm_central' || papelAtual === 'adm'; }
 
 function adaptarUI() {
-  // Mostrar/ocultar opção de papel no modal de usuário
   const painelPapel = document.getElementById('u-papel-wrap');
   if (painelPapel) painelPapel.style.display = isAdmCentral() ? 'block' : 'none';
-  // Subtitle no header
   const sub = document.getElementById('adm-subtitle');
   if (sub) sub.textContent = PAPEL_LABEL[papelAtual] || 'ADM';
+  // Mostrar aba Expedição só para ADM Central ou ADM Expedição
+  const tabExp = document.getElementById('tab-expedicao');
+  if (tabExp) {
+    const verExp = isAdmCentral() || papelAtual === 'adm_expedicao';
+    tabExp.style.display = verExp ? 'block' : 'none';
+  }
 }
 
 function mostrarLogin() {
@@ -409,11 +439,62 @@ async function checarSessao() {
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key==='Enter') fazerLogin(); });
 
 function switchView(view) {
-  document.querySelectorAll('.top-tab').forEach((b,i)=>b.classList.toggle('active', ['listas','usuarios'][i]===view));
+  document.querySelectorAll('.top-tab').forEach((b,i)=>b.classList.toggle('active', ['listas','usuarios','expedicao'][i]===view));
   document.getElementById('view-listas').classList.toggle('active', view==='listas');
   document.getElementById('view-usuarios').classList.toggle('active', view==='usuarios');
+  document.getElementById('view-expedicao').classList.toggle('active', view==='expedicao');
   if (view === 'usuarios') carregarUsuarios();
+  if (view === 'expedicao') carregarPedidosExpedicao();
 }
+
+async function carregarPedidosExpedicao() {
+  try {
+    const pedidos = await api('/api/expedicao/pedidos');
+    document.getElementById('exp-count').textContent = pedidos.length + ' pedido' + (pedidos.length !== 1 ? 's' : '');
+    const tbody = document.getElementById('exp-tbody');
+    if (!pedidos.length) {
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-table"><i class="ti ti-file-invoice"></i>Nenhum pedido. Importe a QRY 180.</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = pedidos.map(p => {
+      const itens = Array.isArray(p.itens) ? p.itens : [];
+      return `<tr>
+        <td style="color:var(--orange);font-weight:600">${p.entrega}</td>
+        <td>${p.ped_cliente||'—'}</td>
+        <td>${p.data_limite||'—'}</td>
+        <td style="font-size:11px;color:var(--text2)">${p.transportadora||'—'}</td>
+        <td><span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:var(--blue-light);color:var(--blue)">${p.mega_rota||'—'}</span></td>
+        <td>${p.uf||'—'}</td>
+        <td style="color:var(--text3)">${itens.length} iten${itens.length!==1?'s':''}</td>
+        <td style="font-size:11px;color:var(--text2)">${p.operador||'—'}</td>
+        <td>${p.concluido?'<span style="color:var(--green);font-size:11px;font-weight:600">✓ Concluído</span>':'<span style="color:var(--amber);font-size:11px">Pendente</span>'}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) { console.error(e); }
+}
+
+document.getElementById('qry180-input').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const statusEl = document.getElementById('exp-status');
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Importando QRY 180...';
+  try {
+    const r = await fetch('/api/expedicao/importar', { method:'POST', body: fd, credentials:'include' });
+    const data = await r.json();
+    if (data.erro) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Erro: ' + data.erro; return; }
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = `✅ ${data.importados} pedidos importados (${data.total_linhas} linhas com "Nota Fiscal Aceita")`;
+    toast(`✅ QRY 180 importada — ${data.importados} pedidos`);
+    carregarPedidosExpedicao();
+  } catch(err) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Erro de conexão';
+  }
+  e.target.value = '';
+});
 
 async function carregarSidebar() {
   const listas = await api('/api/listas');

@@ -500,6 +500,145 @@ app.get('/api/locais-altos', autenticarAdm, async (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+// ── EXPEDIÇÃO — QRY 180 ──────────────────────────────────
+
+// Importar QRY 180 (ADM de expedição)
+app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async (req, res) => {
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    function g(row, keys) {
+      for (const k of keys) if (row[k] !== undefined && row[k] !== '') return String(row[k]).trim();
+      return '';
+    }
+
+    // Filtrar só "NOTA FISCAL ACEITA"
+    const validos = data.filter(r => {
+      const ev = g(r, ['Evento','evento']).toUpperCase();
+      return ev === 'NOTA FISCAL ACEITA';
+    });
+
+    // Agrupar por número de entrega
+    const pedidos = {};
+    for (const r of validos) {
+      const entrega = g(r, ['Entrega','entrega']);
+      if (!entrega) continue;
+      if (!pedidos[entrega]) {
+        pedidos[entrega] = {
+          entrega,
+          ped_cliente: g(r, ['Ped. Cliente','Ped.Cliente']),
+          data_limite: g(r, ['Data Limite','Data limite']),
+          data_entrega: g(r, ['Data entrega','Data Entrega']),
+          evento: g(r, ['Evento','evento']),
+          dt_evento: g(r, ['Dt Evento','Dt. Evento']),
+          operador: g(r, ['Operador','operador']),
+          mega_rota: g(r, ['Mega Rota','Mega rota','MegaRota']),
+          transportadora: g(r, ['Nome Contrato','Nome contrato','Transportadora']),
+          uf: g(r, ['Uf','UF']),
+          nf: g(r, ['Nf.','NF','nf']),
+          serie: g(r, ['Serie','Série','serie']),
+          onda: g(r, ['Onda','onda']),
+          log: g(r, ['Grupo Classe Local','LOG']),
+          itens: []
+        };
+      }
+      pedidos[entrega].itens.push({
+        sku: g(r, ['Item','item']),
+        nome: g(r, ['Nome','nome']),
+        qtd: g(r, ['Qtd. Peças','Qtd. pecas','Qtd'])
+      });
+    }
+
+    const lista = Object.values(pedidos);
+
+    // Criar tabela se não existir e limpar dados anteriores
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS expedicao_pedidos (
+        id TEXT PRIMARY KEY,
+        entrega TEXT NOT NULL,
+        ped_cliente TEXT,
+        data_limite TEXT,
+        data_entrega TEXT,
+        evento TEXT,
+        dt_evento TEXT,
+        operador TEXT,
+        mega_rota TEXT,
+        transportadora TEXT,
+        uf TEXT,
+        nf TEXT,
+        serie TEXT,
+        onda TEXT,
+        log TEXT,
+        itens JSONB,
+        concluido BOOLEAN DEFAULT false,
+        concluido_em TIMESTAMPTZ,
+        concluido_por TEXT,
+        importado_em TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM expedicao_pedidos');
+      for (const p of lista) {
+        await client.query(
+          `INSERT INTO expedicao_pedidos (id,entrega,ped_cliente,data_limite,data_entrega,evento,dt_evento,operador,mega_rota,transportadora,uf,nf,serie,onda,log,itens)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          [uuidv4(), p.entrega, p.ped_cliente, p.data_limite, p.data_entrega, p.evento, p.dt_evento,
+           p.operador, p.mega_rota, p.transportadora, p.uf, p.nf, p.serie, p.onda, p.log, JSON.stringify(p.itens)]
+        );
+      }
+      await client.query('COMMIT');
+    } catch(e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    res.json({ importados: lista.length, total_linhas: validos.length });
+  } catch(e) {
+    res.status(500).json({ erro: 'Erro ao processar QRY 180: ' + e.message });
+  }
+});
+
+// Listar pedidos de expedição (ADM)
+app.get('/api/expedicao/pedidos', autenticarAdm, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM expedicao_pedidos ORDER BY data_limite, entrega');
+    rows.forEach(r => { try { r.itens = typeof r.itens === 'string' ? JSON.parse(r.itens) : r.itens; } catch(e){ r.itens=[]; } });
+    res.json(rows);
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Listar pedidos para o coletor (sem auth ADM)
+app.get('/api/expedicao/coletor', async (req, res) => {
+  try {
+    const { usuario } = req.query;
+    const { rows } = await pool.query('SELECT * FROM expedicao_pedidos ORDER BY data_limite, entrega');
+    rows.forEach(r => { try { r.itens = typeof r.itens === 'string' ? JSON.parse(r.itens) : r.itens; } catch(e){ r.itens=[]; } });
+    res.json(rows);
+  } catch(e) {
+    // Tabela pode não existir ainda
+    res.json([]);
+  }
+});
+
+// Marcar pedido como concluído
+app.patch('/api/expedicao/pedidos/:id/concluir', async (req, res) => {
+  try {
+    const { concluido, usuario } = req.body;
+    await pool.query(
+      'UPDATE expedicao_pedidos SET concluido=$1, concluido_em=$2, concluido_por=$3 WHERE id=$4',
+      [!!concluido, concluido ? new Date() : null, usuario || null, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // Rotas SPA
 app.get('/adm', (req, res) => res.sendFile(path.join(__dirname, '../public/adm/index.html')));
 app.get('/adm/*', (req, res) => res.sendFile(path.join(__dirname, '../public/adm/index.html')));
@@ -510,6 +649,7 @@ app.get('/curva-abc/*', (req, res) => res.sendFile(path.join(__dirname, '../publ
 app.get('/armazenagem', (req, res) => res.sendFile(path.join(__dirname, '../public/armazenagem/index.html')));
 app.get('/faturamento', (req, res) => res.sendFile(path.join(__dirname, '../public/faturamento/index.html')));
 app.get('/expedicao', (req, res) => res.sendFile(path.join(__dirname, '../public/expedicao/index.html')));
+app.get('/expedicao-coletor', (req, res) => res.sendFile(path.join(__dirname, '../public/expedicao-coletor/index.html')));
 
 initDb().then(() => {
   app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
