@@ -187,7 +187,7 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
       </div>
     </div>
     <div class="header-right">
-      <a href="/coletor" target="_blank" class="btn btn-ghost btn-sm"><i class="ti ti-device-mobile"></i> Ver coletor</a>
+      <a id="btn-ver-coletor" href="/coletor" target="_blank" class="btn btn-ghost btn-sm"><i class="ti ti-device-mobile"></i> Ver coletor</a>
       <button class="btn btn-ghost btn-sm" onclick="logout()"><i class="ti ti-logout"></i> Sair</button>
     </div>
   </div>
@@ -387,11 +387,23 @@ function adaptarUI() {
   if (painelPapel) painelPapel.style.display = isAdmCentral() ? 'block' : 'none';
   const sub = document.getElementById('adm-subtitle');
   if (sub) sub.textContent = PAPEL_LABEL[papelAtual] || 'ADM';
-  // Mostrar aba Expedição só para ADM Central ou ADM Expedição
+  // Aba Expedição só para ADM Central ou ADM Expedição
   const tabExp = document.getElementById('tab-expedicao');
   if (tabExp) {
     const verExp = isAdmCentral() || papelAtual === 'adm_expedicao';
     tabExp.style.display = verExp ? 'block' : 'none';
+  }
+  // Link "Ver coletor" aponta para a tela correta do setor
+  const btnColetor = document.getElementById('btn-ver-coletor');
+  if (btnColetor) {
+    const mapaSetor = {
+      adm_armazenagem: '/coletor',
+      adm_expedicao: '/expedicao-coletor',
+      adm_faturamento: '/faturamento',
+      adm_central: '/coletor',
+      adm: '/coletor'
+    };
+    btnColetor.href = mapaSetor[papelAtual] || '/coletor';
   }
 }
 
