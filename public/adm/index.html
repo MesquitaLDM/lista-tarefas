@@ -238,20 +238,35 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
 
   <!-- VIEW EXPEDIÇÃO -->
   <div class="view" id="view-expedicao">
-    <div class="users-wrap" style="max-width:900px">
-      <div class="card-row" style="margin-bottom:14px">
+    <div class="users-wrap" style="max-width:1000px">
+      <div class="card-row" style="margin-bottom:10px">
         <div>
           <h2>Expedição — NFs para Inclusão</h2>
-          <p>Importe a QRY 180 para carregar os pedidos com "Nota Fiscal Aceita"</p>
+          <p>Importe a QRY 180 e flague os pedidos que aparecerão para o operador</p>
         </div>
         <label class="btn btn-orange btn-sm" for="qry180-input" style="cursor:pointer"><i class="ti ti-upload"></i> Importar QRY 180</label>
       </div>
-      <div id="exp-status" style="font-size:12px;color:var(--green);margin-bottom:12px;display:none"></div>
+      <div id="exp-status" style="font-size:12px;color:var(--green);margin-bottom:10px;display:none"></div>
+
+      <!-- Flegar em massa por prazo -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Flagar em massa:</span>
+        <button class="btn btn-ghost btn-sm" onclick="flagarPrazo('atrasado',true)" style="border-color:#E84040;color:#E84040"><i class="ti ti-flag"></i> Atrasados</button>
+        <button class="btn btn-ghost btn-sm" onclick="flagarPrazo('limite',true)" style="border-color:#F0A500;color:#F0A500"><i class="ti ti-flag"></i> Limite (hoje)</button>
+        <button class="btn btn-ghost btn-sm" onclick="flagarPrazo('D+1',true)" style="border-color:#4A9EE8;color:#4A9EE8"><i class="ti ti-flag"></i> D+1</button>
+        <button class="btn btn-ghost btn-sm" onclick="flagarPrazo('adiantado',true)" style="border-color:#6DBF3E;color:#6DBF3E"><i class="ti ti-flag"></i> Adiantados</button>
+        <span style="color:var(--text3);font-size:11px">|</span>
+        <button class="btn btn-ghost btn-sm" onclick="flagarTodos(false)" style="color:var(--text3)"><i class="ti ti-flag-off"></i> Desflagar todos</button>
+      </div>
+
       <div class="table-wrap">
-        <div class="table-header"><span id="exp-count">0 pedidos</span></div>
+        <div class="table-header" style="display:flex;align-items:center;justify-content:space-between">
+          <span id="exp-count">0 pedidos</span>
+          <span id="exp-flag-count" style="font-size:12px;color:var(--orange)"></span>
+        </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Entrega</th><th>Ped. Cliente</th><th>Data Limite</th><th>Transportadora</th><th>Mega Rota</th><th>UF</th><th>Itens</th><th>Operador</th><th>Status</th></tr></thead>
+            <thead><tr><th style="width:40px">Flag</th><th>Prazo</th><th>Entrega</th><th>Data Limite</th><th>Transportadora</th><th>Mega Rota</th><th>Itens</th><th>Operador</th><th>Concluído</th></tr></thead>
             <tbody id="exp-tbody"></tbody>
           </table>
         </div>
@@ -459,10 +474,25 @@ function switchView(view) {
   if (view === 'expedicao') carregarPedidosExpedicao();
 }
 
+function calcPrazo(dataLimite) {
+  if (!dataLimite) return { label: '—', classe: '', cor: 'var(--text3)' };
+  const partes = dataLimite.split('/');
+  if (partes.length < 3) return { label: dataLimite, classe: '', cor: 'var(--text3)' };
+  const d = new Date(+partes[2], +partes[1]-1, +partes[0]);
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1);
+  if (d < hoje) return { label: 'Atrasado', cor: '#E84040', bg: '#2a1010' };
+  if (d.getTime() === hoje.getTime()) return { label: 'Limite', cor: '#F0A500', bg: '#2a2010' };
+  if (d.getTime() === amanha.getTime()) return { label: 'D+1', cor: '#4A9EE8', bg: '#101a2a' };
+  return { label: 'Adiantado', cor: '#6DBF3E', bg: '#1a2a10' };
+}
+
 async function carregarPedidosExpedicao() {
   try {
     const pedidos = await api('/api/expedicao/pedidos');
+    const flagados = pedidos.filter(p => p.flagado).length;
     document.getElementById('exp-count').textContent = pedidos.length + ' pedido' + (pedidos.length !== 1 ? 's' : '');
+    document.getElementById('exp-flag-count').textContent = flagados ? `${flagados} flagados para o operador` : '';
     const tbody = document.getElementById('exp-tbody');
     if (!pedidos.length) {
       tbody.innerHTML = '<tr><td colspan="9"><div class="empty-table"><i class="ti ti-file-invoice"></i>Nenhum pedido. Importe a QRY 180.</div></td></tr>';
@@ -470,19 +500,44 @@ async function carregarPedidosExpedicao() {
     }
     tbody.innerHTML = pedidos.map(p => {
       const itens = Array.isArray(p.itens) ? p.itens : [];
+      const prazo = calcPrazo(p.data_limite);
       return `<tr>
+        <td style="text-align:center">
+          <input type="checkbox" ${p.flagado?'checked':''} onchange="toggleFlag('${p.id}',this.checked)"
+            style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer">
+        </td>
+        <td>
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:${prazo.bg};color:${prazo.cor}">
+            ${prazo.label}
+          </span>
+        </td>
         <td style="color:var(--orange);font-weight:600">${p.entrega}</td>
-        <td>${p.ped_cliente||'—'}</td>
         <td>${p.data_limite||'—'}</td>
-        <td style="font-size:11px;color:var(--text2)">${p.transportadora||'—'}</td>
-        <td><span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:var(--blue-light);color:var(--blue)">${p.mega_rota||'—'}</span></td>
-        <td>${p.uf||'—'}</td>
-        <td style="color:var(--text3)">${itens.length} iten${itens.length!==1?'s':''}</td>
-        <td style="font-size:11px;color:var(--text2)">${p.operador||'—'}</td>
-        <td>${p.concluido?'<span style="color:var(--green);font-size:11px;font-weight:600">✓ Concluído</span>':'<span style="color:var(--amber);font-size:11px">Pendente</span>'}</td>
+        <td style="font-size:11px;color:var(--text2);max-width:160px">${p.transportadora||'—'}</td>
+        <td><span style="font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;background:var(--blue-light);color:var(--blue)">${p.mega_rota||'—'}</span></td>
+        <td style="color:var(--text3)">${itens.length} it.</td>
+        <td style="font-size:11px;color:var(--text2)">${(p.operador||'—').replace('MECA_','')}</td>
+        <td>${p.concluido?'<span style="color:var(--green);font-size:11px;font-weight:600">✓</span>':'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
       </tr>`;
     }).join('');
   } catch(e) { console.error(e); }
+}
+
+async function toggleFlag(id, flagado) {
+  await api('/api/expedicao/pedidos/' + id + '/flegar', { method:'PATCH', body: JSON.stringify({ flagado }) });
+  carregarPedidosExpedicao();
+}
+
+async function flagarPrazo(prazo, flagado) {
+  await api('/api/expedicao/pedidos/flegar-todos', { method:'PATCH', body: JSON.stringify({ flagado, prazo }) });
+  toast(`✅ Pedidos "${prazo}" flagados`);
+  carregarPedidosExpedicao();
+}
+
+async function flagarTodos(flagado) {
+  await api('/api/expedicao/pedidos/flegar-todos', { method:'PATCH', body: JSON.stringify({ flagado }) });
+  toast(flagado ? '✅ Todos flagados' : 'Todos desflagados');
+  carregarPedidosExpedicao();
 }
 
 document.getElementById('qry180-input').addEventListener('change', async function(e) {

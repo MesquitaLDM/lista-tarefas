@@ -201,6 +201,19 @@ let pedidos = [];
 let filtroRota = 'all';
 let pedidoParaConcluir = null;
 
+function calcPrazo(dataLimite) {
+  if (!dataLimite) return { label: '—', cor: 'var(--text3)', bg: 'var(--bg3)' };
+  const partes = dataLimite.split('/');
+  if (partes.length < 3) return { label: dataLimite, cor: 'var(--text3)', bg: 'var(--bg3)' };
+  const d = new Date(+partes[2], +partes[1]-1, +partes[0]);
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1);
+  if (d < hoje) return { label: 'Atrasado', cor: '#E84040', bg: '#2a1010' };
+  if (d.getTime() === hoje.getTime()) return { label: 'Limite', cor: '#F0A500', bg: '#2a2010' };
+  if (d.getTime() === amanha.getTime()) return { label: 'D+1', cor: '#4A9EE8', bg: '#101a2a' };
+  return { label: 'Adiantado', cor: '#6DBF3E', bg: '#1a2a10' };
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -306,6 +319,7 @@ function renderCards() {
             <div class="card-entrega">
               <i class="ti ti-file-invoice" style="color:var(--blue)"></i>
               Pedido ${p.entrega}
+              <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:${calcPrazo(p.data_limite).bg};color:${calcPrazo(p.data_limite).cor}">${calcPrazo(p.data_limite).label}</span>
               <span class="ped">Ped. Cliente: ${p.ped_cliente||'—'}</span>
             </div>
             <div class="card-transp"><i class="ti ti-truck-delivery" style="font-size:11px"></i> ${p.transportadora||'—'}</div>

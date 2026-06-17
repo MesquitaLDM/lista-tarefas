@@ -514,10 +514,11 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
       return '';
     }
 
-    // Filtrar só "NOTA FISCAL ACEITA"
+    // Filtrar só "NOTA FISCAL ACEITA" e excluir canais INT e PSV
     const validos = data.filter(r => {
       const ev = g(r, ['Evento','evento']).toUpperCase();
-      return ev === 'NOTA FISCAL ACEITA';
+      const canal = g(r, ['Canal','canal']).toUpperCase();
+      return ev === 'NOTA FISCAL ACEITA' && canal !== 'INT' && canal !== 'PSV';
     });
 
     // Agrupar por número de entrega
@@ -572,12 +573,14 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
         onda TEXT,
         log TEXT,
         itens JSONB,
+        flagado BOOLEAN DEFAULT false,
         concluido BOOLEAN DEFAULT false,
         concluido_em TIMESTAMPTZ,
         concluido_por TEXT,
         importado_em TIMESTAMPTZ DEFAULT now()
       );
     `);
+    await pool.query(`ALTER TABLE expedicao_pedidos ADD COLUMN IF NOT EXISTS flagado BOOLEAN DEFAULT false;`);
 
     const client = await pool.connect();
     try {
@@ -614,20 +617,53 @@ app.get('/api/expedicao/pedidos', autenticarAdm, async (req, res) => {
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// Listar pedidos para o coletor (sem auth ADM)
+// Listar pedidos para o coletor (só flagados)
 app.get('/api/expedicao/coletor', async (req, res) => {
   try {
-    const { usuario } = req.query;
-    const { rows } = await pool.query('SELECT * FROM expedicao_pedidos ORDER BY data_limite, entrega');
+    const { rows } = await pool.query('SELECT * FROM expedicao_pedidos WHERE flagado=true ORDER BY data_limite, entrega');
     rows.forEach(r => { try { r.itens = typeof r.itens === 'string' ? JSON.parse(r.itens) : r.itens; } catch(e){ r.itens=[]; } });
     res.json(rows);
   } catch(e) {
-    // Tabela pode não existir ainda
     res.json([]);
   }
 });
 
-// Marcar pedido como concluído
+// Flegar / desflegar pedido (ADM)
+app.patch('/api/expedicao/pedidos/:id/flegar', autenticarAdm, async (req, res) => {
+  try {
+    const { flagado } = req.body;
+    await pool.query('UPDATE expedicao_pedidos SET flagado=$1 WHERE id=$2', [!!flagado, req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Flegar todos de uma vez (ADM)
+app.patch('/api/expedicao/pedidos/flegar-todos', autenticarAdm, async (req, res) => {
+  try {
+    const { flagado, prazo } = req.body;
+    // prazo pode ser: 'atrasado', 'limite', 'D+1', 'adiantado', ou null (todos)
+    if (prazo) {
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1);
+      const { rows } = await pool.query('SELECT id, data_limite FROM expedicao_pedidos');
+      const ids = rows.filter(p => {
+        if (!p.data_limite) return false;
+        const partes = p.data_limite.split('/');
+        const d = new Date(+partes[2], +partes[1]-1, +partes[0]);
+        if (prazo==='atrasado') return d < hoje;
+        if (prazo==='limite') return d.getTime()===hoje.getTime();
+        if (prazo==='D+1') return d.getTime()===amanha.getTime();
+        if (prazo==='adiantado') return d > amanha;
+        return false;
+      }).map(p => p.id);
+      if (ids.length) await pool.query(`UPDATE expedicao_pedidos SET flagado=$1 WHERE id = ANY($2)`, [!!flagado, ids]);
+      res.json({ ok: true, atualizados: ids.length });
+    } else {
+      await pool.query('UPDATE expedicao_pedidos SET flagado=$1', [!!flagado]);
+      res.json({ ok: true });
+    }
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
 app.patch('/api/expedicao/pedidos/:id/concluir', async (req, res) => {
   try {
     const { concluido, usuario } = req.body;
