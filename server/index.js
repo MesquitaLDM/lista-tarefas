@@ -52,6 +52,7 @@ async function initDb() {
   `);
   // Migração: garante colunas em bancos já existentes
   await pool.query(`ALTER TABLE itens ADD COLUMN IF NOT EXISTS usuario TEXT;`);
+  await pool.query(`ALTER TABLE listas ADD COLUMN IF NOT EXISTS setor TEXT DEFAULT 'armazenagem';`);
   await pool.query(`ALTER TABLE itens ADD COLUMN IF NOT EXISTS tarefa_gerada BOOLEAN DEFAULT false;`);
   await pool.query(`ALTER TABLE itens ADD COLUMN IF NOT EXISTS tarefa_em TIMESTAMPTZ;`);
 
@@ -79,14 +80,14 @@ async function initDb() {
   await pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS acessos TEXT DEFAULT '[]';`);
 
   // Cria um usuário admin padrão se não existir nenhum ADM
-  const { rows } = await pool.query(`SELECT COUNT(*) FROM usuarios WHERE papel='adm'`);
+  const { rows } = await pool.query(`SELECT COUNT(*) FROM usuarios WHERE papel IN ('adm','adm_central')`);
   if (parseInt(rows[0].count) === 0) {
     const hash = await bcrypt.hash('admin123', 10);
     await pool.query(
-      `INSERT INTO usuarios (id, username, senha_hash, papel) VALUES ($1,$2,$3,'adm')`,
+      `INSERT INTO usuarios (id, username, senha_hash, papel) VALUES ($1,$2,$3,'adm_central')`,
       [uuidv4(), 'admin', hash]
     );
-    console.log('Usuário ADM padrão criado: admin / admin123 (troque a senha depois!)');
+    console.log('Usuário ADM Central padrão criado: admin / admin123 (troque a senha depois!)');
   }
 
   console.log('Banco de dados pronto');
@@ -102,16 +103,26 @@ const upload = multer({ storage: multer.memoryStorage() });
 // ── AUTH HELPERS ─────────────────────────────────────────
 
 function gerarToken(usuario) {
-  return jwt.sign({ id: usuario.id, username: usuario.username, papel: usuario.papel }, JWT_SECRET, { expiresIn: '12h' });
+  return jwt.sign({ id: usuario.id, username: usuario.username, papel: usuario.papel, setor_adm: usuario.setor_adm||null }, JWT_SECRET, { expiresIn: '12h' });
 }
 
+function isAdm(papel) {
+  return papel === 'adm_central' || papel === 'adm' || (papel && papel.startsWith('adm_'));
+}
+function setorDoAdm(papel) {
+  if (papel === 'adm_central' || papel === 'adm') return null; // acesso total
+  if (papel && papel.startsWith('adm_')) return papel.replace('adm_', '');
+  return null;
+}
 function autenticarAdm(req, res, next) {
   const token = req.cookies.token;
   if (!token) return res.status(401).json({ erro: 'Não autenticado' });
   try {
     const dados = jwt.verify(token, JWT_SECRET);
-    if (dados.papel !== 'adm') return res.status(403).json({ erro: 'Acesso restrito ao ADM' });
+    if (!isAdm(dados.papel)) return res.status(403).json({ erro: 'Acesso restrito ao ADM' });
     req.usuario = dados;
+    req.isCentral = (dados.papel === 'adm_central' || dados.papel === 'adm');
+    req.setorAdm = setorDoAdm(dados.papel);
     next();
   } catch (e) {
     return res.status(401).json({ erro: 'Sessão inválida' });
@@ -124,7 +135,7 @@ function autenticarAdm(req, res, next) {
 app.post('/api/login', async (req, res) => {
   try {
     const { username, senha } = req.body;
-    const { rows } = await pool.query('SELECT * FROM usuarios WHERE username=$1 AND papel=$2', [username, 'adm']);
+    const { rows } = await pool.query("SELECT * FROM usuarios WHERE username=$1 AND (papel='adm' OR papel='adm_central' OR papel LIKE 'adm_%')", [username]);
     if (!rows.length) return res.status(401).json({ erro: 'Usuário ou senha inválidos' });
     const usuario = rows[0];
     const ok = await bcrypt.compare(senha || '', usuario.senha_hash || '');
@@ -145,7 +156,7 @@ app.get('/api/me', (req, res) => {
   if (!token) return res.json({ logado: false });
   try {
     const dados = jwt.verify(token, JWT_SECRET);
-    res.json({ logado: true, username: dados.username, papel: dados.papel });
+    res.json({ logado: true, username: dados.username, papel: dados.papel, setor_adm: setorDoAdm(dados.papel) });
   } catch (e) {
     res.json({ logado: false });
   }
@@ -173,7 +184,8 @@ app.get('/api/coletor/acesso/:setor', async (req, res) => {
     const { rows } = await pool.query('SELECT acessos, papel FROM usuarios WHERE username=$1', [usuario]);
     if (!rows.length) return res.json({ permitido: false });
     const u = rows[0];
-    if (u.papel === 'adm') return res.json({ permitido: true }); // ADM acessa tudo
+    if (u.papel === 'adm' || u.papel === 'adm_central') return res.json({ permitido: true }); // ADM central acessa tudo
+    if (u.papel && u.papel.startsWith('adm_')) return res.json({ permitido: u.papel === 'adm_'+req.params.setor });
     let acessos = [];
     try { acessos = JSON.parse(u.acessos || '[]'); } catch(e) {}
     res.json({ permitido: acessos.includes(req.params.setor) });
@@ -184,7 +196,14 @@ app.get('/api/coletor/acesso/:setor', async (req, res) => {
 
 app.get('/api/usuarios', autenticarAdm, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, username, papel, acessos, criado_em FROM usuarios ORDER BY criado_em DESC');
+    let rows;
+    if (req.isCentral) {
+      ({ rows } = await pool.query('SELECT id, username, papel, acessos, criado_em FROM usuarios ORDER BY criado_em DESC'));
+    } else {
+      // ADM de setor vê só operadores do seu setor
+      ({ rows } = await pool.query("SELECT id, username, papel, acessos, criado_em FROM usuarios WHERE papel='operador' ORDER BY criado_em DESC"));
+      rows = rows.filter(u => { try { return JSON.parse(u.acessos||'[]').includes(req.setorAdm); } catch(e){ return false; } });
+    }
     rows.forEach(u => { try { u.acessos = JSON.parse(u.acessos||'[]'); } catch(e) { u.acessos = []; } });
     res.json(rows);
   } catch (e) { res.status(500).json({ erro: e.message }); }
@@ -194,11 +213,15 @@ app.post('/api/usuarios', autenticarAdm, async (req, res) => {
   try {
     const { username, senha, papel, acessos } = req.body;
     if (!username || !papel) return res.status(400).json({ erro: 'Usuário e papel são obrigatórios' });
-    if (papel === 'adm' && !senha) return res.status(400).json({ erro: 'Senha é obrigatória para usuários ADM' });
+    // ADM de setor só pode criar operadores
+    if (!req.isCentral && papel !== 'operador') return res.status(403).json({ erro: 'Você só pode criar operadores' });
+    // ADM de setor garante que o setor dele está nos acessos
+    let acessosFinais = acessos || [];
+    if (!req.isCentral && !acessosFinais.includes(req.setorAdm)) acessosFinais = [...acessosFinais, req.setorAdm];
+    if (isAdm(papel) && !senha) return res.status(400).json({ erro: 'Senha é obrigatória para ADM' });
     const id = uuidv4();
     const hash = senha ? await bcrypt.hash(senha, 10) : null;
-    const acessosStr = JSON.stringify(acessos || []);
-    await pool.query('INSERT INTO usuarios (id, username, senha_hash, papel, acessos) VALUES ($1,$2,$3,$4,$5)', [id, username.trim(), hash, papel, acessosStr]);
+    await pool.query('INSERT INTO usuarios (id, username, senha_hash, papel, acessos) VALUES ($1,$2,$3,$4,$5)', [id, username.trim(), hash, papel, JSON.stringify(acessosFinais)]);
     res.json({ id });
   } catch (e) {
     if (e.code === '23505') return res.status(400).json({ erro: 'Esse usuário já existe' });
@@ -209,11 +232,17 @@ app.post('/api/usuarios', autenticarAdm, async (req, res) => {
 app.patch('/api/usuarios/:id', autenticarAdm, async (req, res) => {
   try {
     const { senha, papel, acessos } = req.body;
-    if (senha) {
-      const hash = await bcrypt.hash(senha, 10);
-      await pool.query('UPDATE usuarios SET senha_hash=$1 WHERE id=$2', [hash, req.params.id]);
+    if (!req.isCentral) {
+      // ADM de setor: verificar se o usuário pertence ao seu setor
+      const { rows } = await pool.query('SELECT acessos, papel FROM usuarios WHERE id=$1', [req.params.id]);
+      if (!rows.length) return res.status(404).json({ erro: 'Usuário não encontrado' });
+      const alvo = rows[0];
+      if (isAdm(alvo.papel)) return res.status(403).json({ erro: 'Sem permissão para editar ADMs' });
+      let acessosAlvo = []; try { acessosAlvo = JSON.parse(alvo.acessos||'[]'); } catch(e){}
+      if (!acessosAlvo.includes(req.setorAdm)) return res.status(403).json({ erro: 'Sem permissão para editar este usuário' });
     }
-    if (papel) await pool.query('UPDATE usuarios SET papel=$1 WHERE id=$2', [papel, req.params.id]);
+    if (senha) { const hash = await bcrypt.hash(senha, 10); await pool.query('UPDATE usuarios SET senha_hash=$1 WHERE id=$2', [hash, req.params.id]); }
+    if (papel && req.isCentral) await pool.query('UPDATE usuarios SET papel=$1 WHERE id=$2', [papel, req.params.id]);
     if (acessos !== undefined) await pool.query('UPDATE usuarios SET acessos=$1 WHERE id=$2', [JSON.stringify(acessos), req.params.id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ erro: e.message }); }
@@ -230,7 +259,12 @@ app.delete('/api/usuarios/:id', autenticarAdm, async (req, res) => {
 
 app.get('/api/listas', autenticarAdm, async (req, res) => {
   try {
-    const { rows: listas } = await pool.query('SELECT * FROM listas ORDER BY criado_em DESC');
+    let listas;
+    if (req.isCentral) {
+      ({ rows: listas } = await pool.query('SELECT * FROM listas ORDER BY criado_em DESC'));
+    } else {
+      ({ rows: listas } = await pool.query("SELECT * FROM listas WHERE setor=$1 ORDER BY criado_em DESC", [req.setorAdm]));
+    }
     for (const l of listas) {
       const total = await pool.query('SELECT COUNT(*) FROM itens WHERE lista_id=$1', [l.id]);
       const feitos = await pool.query('SELECT COUNT(*) FROM itens WHERE lista_id=$1 AND feito=true', [l.id]);
@@ -245,7 +279,8 @@ app.post('/api/listas', autenticarAdm, async (req, res) => {
   try {
     const { nome } = req.body;
     const id = uuidv4();
-    await pool.query('INSERT INTO listas (id, nome) VALUES ($1,$2)', [id, nome || 'Nova lista']);
+    const setor = req.setorAdm || 'armazenagem';
+    await pool.query('INSERT INTO listas (id, nome, setor) VALUES ($1,$2,$3)', [id, nome || 'Nova lista', setor]);
     res.json({ id });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
