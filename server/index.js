@@ -629,8 +629,8 @@ app.get('/api/expedicao/coletor', async (req, res) => {
 });
 
 // Flegar / desflegar pedido (ADM)
-// Flegar todos de uma vez (ADM) — DEVE vir ANTES de /:id/flegar
-app.patch('/api/expedicao/pedidos/flegar-todos', autenticarAdm, async (req, res) => {
+// Flegar em massa (ADM) — rota separada sem conflito
+app.patch('/api/expedicao/flegar-massa', autenticarAdm, async (req, res) => {
   try {
     const { flagado, prazo } = req.body;
     if (prazo) {
@@ -640,6 +640,7 @@ app.patch('/api/expedicao/pedidos/flegar-todos', autenticarAdm, async (req, res)
       const ids = rows.filter(p => {
         if (!p.data_limite) return false;
         const partes = p.data_limite.split('/');
+        if (partes.length < 3) return false;
         const d = new Date(+partes[2], +partes[1]-1, +partes[0]);
         if (prazo==='atrasado') return d < hoje;
         if (prazo==='limite') return d.getTime()===hoje.getTime();
@@ -647,12 +648,20 @@ app.patch('/api/expedicao/pedidos/flegar-todos', autenticarAdm, async (req, res)
         if (prazo==='adiantado') return d > amanha;
         return false;
       }).map(p => p.id);
-      if (ids.length) await pool.query(`UPDATE expedicao_pedidos SET flagado=$1 WHERE id = ANY($2)`, [!!flagado, ids]);
+      if (ids.length) await pool.query(`UPDATE expedicao_pedidos SET flagado=$1 WHERE id = ANY($2::text[])`, [!!flagado, ids]);
       res.json({ ok: true, atualizados: ids.length });
     } else {
       await pool.query('UPDATE expedicao_pedidos SET flagado=$1', [!!flagado]);
       res.json({ ok: true });
     }
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Excluir todos os pedidos de expedição (ADM)
+app.delete('/api/expedicao/pedidos', autenticarAdm, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM expedicao_pedidos');
+    res.json({ ok: true });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
