@@ -509,11 +509,12 @@ async function carregarPedidosExpedicao() {
       return;
     }
     tbody.innerHTML = pedidos.map(p => {
-      const itens = Array.isArray(p.itens) ? p.itens : [];
+      const itens = Array.isArray(p.itens) ? p.itens : (typeof p.itens === 'string' ? JSON.parse(p.itens) : []);
       const prazo = calcPrazo(p.data_limite);
+      const flagado = p.flagado === true || p.flagado === 't' || p.flagado === '1' || p.flagado === 'true';
       return `<tr>
         <td style="text-align:center">
-          <input type="checkbox" ${p.flagado?'checked':''} onchange="toggleFlag('${p.id}',this.checked)"
+          <input type="checkbox" ${flagado?'checked':''} onchange="toggleFlag('${p.id}',this.checked)"
             style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer">
         </td>
         <td>

@@ -638,19 +638,9 @@ app.patch('/api/expedicao/flegar-massa', autenticarAdm, async (req, res) => {
       const hojeUTC = Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate());
       const amanhaUTC = hojeUTC + 86400000;
 
-      console.log(`[FLEGAR] prazo=${prazo} | agora=${agora.toISOString()} | hojeUTC=${new Date(hojeUTC).toISOString()} | amanhaUTC=${new Date(amanhaUTC).toISOString()}`);
+      console.log(`[FLEGAR] prazo=${prazo} | hojeUTC=${new Date(hojeUTC).toISOString().split('T')[0]}`);
 
       const { rows } = await pool.query('SELECT id, data_limite FROM expedicao_pedidos');
-
-      // Log das primeiras 5 datas para debug
-      rows.slice(0,5).forEach(p => {
-        const dataStr = (p.data_limite||'').trim().split(' ')[0];
-        const partes = dataStr.split('/');
-        const dia = parseInt(partes[0],10), mes = parseInt(partes[1],10)-1, ano = parseInt(partes[2],10);
-        const dUTC = Date.UTC(ano, mes, dia);
-        console.log(`  data_limite="${p.data_limite}" -> dUTC=${new Date(dUTC).toISOString()} | atrasado=${dUTC < hojeUTC} | limite=${dUTC===hojeUTC} | D+1=${dUTC===amanhaUTC}`);
-      });
-
       const ids = rows.filter(p => {
         if (!p.data_limite) return false;
         const dataStr = p.data_limite.trim().split(' ')[0];
@@ -667,8 +657,6 @@ app.patch('/api/expedicao/flegar-massa', autenticarAdm, async (req, res) => {
         if (prazo==='adiantado') return dUTC > amanhaUTC;
         return false;
       }).map(p => p.id);
-
-      console.log(`[FLEGAR] encontrados=${ids.length} ids para prazo=${prazo}`);
 
       if (ids.length) await pool.query(`UPDATE expedicao_pedidos SET flagado=$1 WHERE id = ANY($2::text[])`, [!!flagado, ids]);
       res.json({ ok: true, atualizados: ids.length });
