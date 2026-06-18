@@ -634,11 +634,14 @@ app.patch('/api/expedicao/flegar-massa', autenticarAdm, async (req, res) => {
   try {
     const { flagado, prazo } = req.body;
     if (prazo) {
+      // Compensar fuso Brasil (UTC-3): subtrair 3 horas do UTC para pegar o dia correto de Brasília
       const agora = new Date();
-      const hojeUTC = Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate());
+      const brasilOffset = 3 * 60 * 60 * 1000; // UTC-3
+      const agoraBrasil = new Date(agora.getTime() - brasilOffset);
+      const hojeUTC = Date.UTC(agoraBrasil.getUTCFullYear(), agoraBrasil.getUTCMonth(), agoraBrasil.getUTCDate());
       const amanhaUTC = hojeUTC + 86400000;
 
-      console.log(`[FLEGAR] prazo=${prazo} | hojeUTC=${new Date(hojeUTC).toISOString().split('T')[0]}`);
+      console.log(`[FLEGAR] prazo=${prazo} | hojeUTC=${new Date(hojeUTC).toISOString().split('T')[0]} | agoraBrasil=${agoraBrasil.toISOString()}`);
 
       const { rows } = await pool.query('SELECT id, data_limite FROM expedicao_pedidos');
       const ids = rows.filter(p => {
