@@ -634,12 +634,14 @@ app.patch('/api/expedicao/flegar-massa', autenticarAdm, async (req, res) => {
   try {
     const { flagado, prazo } = req.body;
     if (prazo) {
-      const hoje = new Date(); hoje.setHours(0,0,0,0);
-      const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1);
+      // Usar UTC para evitar problema de fuso horário (Render usa UTC, Brasil é UTC-3)
+      const agora = new Date();
+      const hojeUTC = Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate());
+      const amanhaUTC = hojeUTC + 86400000;
+
       const { rows } = await pool.query('SELECT id, data_limite FROM expedicao_pedidos');
       const ids = rows.filter(p => {
         if (!p.data_limite) return false;
-        // Normaliza: pega só DD/MM/YYYY ignorando hora se vier junto
         const dataStr = p.data_limite.trim().split(' ')[0];
         const partes = dataStr.split('/');
         if (partes.length < 3) return false;
@@ -647,12 +649,11 @@ app.patch('/api/expedicao/flegar-massa', autenticarAdm, async (req, res) => {
         const mes = parseInt(partes[1], 10) - 1;
         const ano = parseInt(partes[2], 10);
         if (isNaN(dia) || isNaN(mes) || isNaN(ano)) return false;
-        const d = new Date(ano, mes, dia);
-        d.setHours(0,0,0,0);
-        if (prazo==='atrasado') return d < hoje;
-        if (prazo==='limite') return d.getTime() === hoje.getTime();
-        if (prazo==='D+1') return d.getTime() === amanha.getTime();
-        if (prazo==='adiantado') return d > amanha;
+        const dUTC = Date.UTC(ano, mes, dia);
+        if (prazo==='atrasado') return dUTC < hojeUTC;
+        if (prazo==='limite') return dUTC === hojeUTC;
+        if (prazo==='D+1') return dUTC === amanhaUTC;
+        if (prazo==='adiantado') return dUTC > amanhaUTC;
         return false;
       }).map(p => p.id);
       if (ids.length) await pool.query(`UPDATE expedicao_pedidos SET flagado=$1 WHERE id = ANY($2::text[])`, [!!flagado, ids]);
