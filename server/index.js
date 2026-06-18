@@ -639,12 +639,19 @@ app.patch('/api/expedicao/flegar-massa', autenticarAdm, async (req, res) => {
       const { rows } = await pool.query('SELECT id, data_limite FROM expedicao_pedidos');
       const ids = rows.filter(p => {
         if (!p.data_limite) return false;
-        const partes = p.data_limite.split('/');
+        // Normaliza: pega só DD/MM/YYYY ignorando hora se vier junto
+        const dataStr = p.data_limite.trim().split(' ')[0];
+        const partes = dataStr.split('/');
         if (partes.length < 3) return false;
-        const d = new Date(+partes[2], +partes[1]-1, +partes[0]);
+        const dia = parseInt(partes[0], 10);
+        const mes = parseInt(partes[1], 10) - 1;
+        const ano = parseInt(partes[2], 10);
+        if (isNaN(dia) || isNaN(mes) || isNaN(ano)) return false;
+        const d = new Date(ano, mes, dia);
+        d.setHours(0,0,0,0);
         if (prazo==='atrasado') return d < hoje;
-        if (prazo==='limite') return d.getTime()===hoje.getTime();
-        if (prazo==='D+1') return d.getTime()===amanha.getTime();
+        if (prazo==='limite') return d.getTime() === hoje.getTime();
+        if (prazo==='D+1') return d.getTime() === amanha.getTime();
         if (prazo==='adiantado') return d > amanha;
         return false;
       }).map(p => p.id);

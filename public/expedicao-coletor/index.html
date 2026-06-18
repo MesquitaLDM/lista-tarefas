@@ -247,9 +247,14 @@ function filtrarPorTipo(lista) {
 
 function calcPrazo(dataLimite) {
   if (!dataLimite) return { label: '—', cor: 'var(--text3)', bg: 'var(--bg3)' };
-  const partes = dataLimite.split('/');
+  const dataStr = dataLimite.trim().split(' ')[0];
+  const partes = dataStr.split('/');
   if (partes.length < 3) return { label: dataLimite, cor: 'var(--text3)', bg: 'var(--bg3)' };
-  const d = new Date(+partes[2], +partes[1]-1, +partes[0]);
+  const dia = parseInt(partes[0], 10);
+  const mes = parseInt(partes[1], 10) - 1;
+  const ano = parseInt(partes[2], 10);
+  if (isNaN(dia) || isNaN(mes) || isNaN(ano)) return { label: dataLimite, cor: 'var(--text3)', bg: 'var(--bg3)' };
+  const d = new Date(ano, mes, dia); d.setHours(0,0,0,0);
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1);
   if (d < hoje) return { label: 'Atrasado', cor: '#E84040', bg: '#2a1010' };
