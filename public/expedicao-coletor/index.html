@@ -152,16 +152,46 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <!-- APP -->
+<div class="screen" id="tela-tipo">
+  <div class="center-screen">
+    <div class="box" style="max-width:380px">
+      <img src="" id="tipo-logo" alt="Logo" style="width:44px;height:44px;object-fit:contain;margin:0 auto 10px;display:block">
+      <h1>Loja do <span>Mecânico</span></h1>
+      <p class="sub" style="margin-bottom:20px">Expedição — Selecione o tipo</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="selecionarTipo('leve')" style="padding:16px;border-radius:12px;border:2px solid #4A9EE8;background:#101a2a;color:#4A9EE8;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left;transition:all .2s">
+          <i class="ti ti-package" style="font-size:26px"></i>
+          <div>
+            <div>Leve</div>
+            <div style="font-size:11px;font-weight:400;color:#4A9EE8;opacity:.7;margin-top:2px">Demais séries (exceto 13, 16, 32)</div>
+          </div>
+        </button>
+        <button onclick="selecionarTipo('pesado')" style="padding:16px;border-radius:12px;border:2px solid #F0A500;background:#2a2010;color:#F0A500;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left;transition:all .2s">
+          <i class="ti ti-forklift" style="font-size:26px"></i>
+          <div>
+            <div>Pesado</div>
+            <div style="font-size:11px;font-weight:400;color:#F0A500;opacity:.7;margin-top:2px">Séries 13, 16 e 32</div>
+          </div>
+        </button>
+      </div>
+      <button onclick="logout()" style="margin-top:16px;background:transparent;border:1px solid var(--border2);color:var(--text3);padding:8px 16px;border-radius:8px;font-size:12px;cursor:pointer;width:100%">
+        <i class="ti ti-logout"></i> Sair
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="screen" id="tela-app">
   <div class="header">
     <div class="header-top">
       <div class="header-left">
         <div class="dot"></div>
-        <h1>Loja do <span>Mecânico</span> — <span style="color:var(--blue)">Expedição</span></h1>
+        <h1>Loja do <span>Mecânico</span> — <span id="tipo-label" style="color:var(--blue)">Expedição</span></h1>
       </div>
       <div class="header-right">
         <span class="user-pill" id="user-label"></span>
         <button class="icon-btn" onclick="carregarPedidos()" title="Atualizar"><i class="ti ti-refresh"></i></button>
+        <button class="icon-btn" onclick="voltarTipo()" title="Trocar tipo"><i class="ti ti-arrow-left"></i></button>
         <button class="icon-btn" onclick="logout()" title="Sair"><i class="ti ti-logout"></i></button>
       </div>
     </div>
@@ -200,6 +230,20 @@ let username = null;
 let pedidos = [];
 let filtroRota = 'all';
 let pedidoParaConcluir = null;
+let tipoAtual = null; // 'leve' ou 'pesado'
+
+const SERIES_PESADO = ['13','16','32'];
+
+function isPesado(serie) {
+  if (!serie) return false;
+  return SERIES_PESADO.includes(String(serie).trim());
+}
+
+function filtrarPorTipo(lista) {
+  if (tipoAtual === 'pesado') return lista.filter(p => isPesado(p.serie));
+  if (tipoAtual === 'leve') return lista.filter(p => !isPesado(p.serie));
+  return lista;
+}
 
 function calcPrazo(dataLimite) {
   if (!dataLimite) return { label: '—', cor: 'var(--text3)', bg: 'var(--bg3)' };
@@ -235,13 +279,29 @@ async function verificarAcesso() {
     if (data.permitido) {
       username = user;
       document.getElementById('user-label').textContent = user;
-      mostrar('app');
-      carregarPedidos();
+      mostrar('tipo'); // vai para seleção de tipo
     } else {
       document.getElementById('sem-acesso-user').textContent = user;
       mostrar('sem-acesso');
     }
   } catch(e) { mostrar('login'); }
+}
+
+function selecionarTipo(tipo) {
+  tipoAtual = tipo;
+  filtroRota = 'all';
+  const label = document.getElementById('tipo-label');
+  if (label) {
+    label.textContent = tipo === 'pesado' ? '🏋️ Pesado' : '📦 Leve';
+    label.style.color = tipo === 'pesado' ? '#F0A500' : '#4A9EE8';
+  }
+  mostrar('app');
+  carregarPedidos();
+}
+
+function voltarTipo() {
+  tipoAtual = null;
+  mostrar('tipo');
 }
 
 async function fazerLogin() {
@@ -282,7 +342,8 @@ async function carregarPedidos() {
 }
 
 function renderFiltros() {
-  const rotas = ['all', ...new Set(pedidos.map(p => p.mega_rota).filter(Boolean).sort())];
+  const porTipo = filtrarPorTipo(pedidos);
+  const rotas = ['all', ...new Set(porTipo.map(p => p.mega_rota).filter(Boolean).sort())];
   document.getElementById('filter-bar').innerHTML = rotas.map(r =>
     `<button class="filter-chip${filtroRota===r?' active':''}" onclick="setFiltro('${r}')">${r==='all'?'Todas':r}</button>`
   ).join('');
@@ -291,7 +352,8 @@ function renderFiltros() {
 function setFiltro(r) { filtroRota = r; renderFiltros(); renderCards(); }
 
 function renderCards() {
-  const filtrado = filtroRota === 'all' ? pedidos : pedidos.filter(p => p.mega_rota === filtroRota);
+  const porTipo = filtrarPorTipo(pedidos);
+  const filtrado = filtroRota === 'all' ? porTipo : porTipo.filter(p => p.mega_rota === filtroRota);
   const done = filtrado.filter(p => p.concluido).length;
   const total = filtrado.length;
   document.getElementById('s-total').textContent = total;
