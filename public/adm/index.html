@@ -248,14 +248,24 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
       <div id="exp-status" style="font-size:12px;color:var(--green);margin-bottom:10px;display:none"></div>
 
       <!-- Flegar em massa por prazo -->
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-        <span style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Flagar em massa:</span>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Flagar por prazo:</span>
         <button class="btn btn-ghost btn-sm" onclick="flagarMassa('atrasado',true)" style="border-color:#E84040;color:#E84040"><i class="ti ti-flag"></i> Atrasados</button>
         <button class="btn btn-ghost btn-sm" onclick="flagarMassa('limite',true)" style="border-color:#F0A500;color:#F0A500"><i class="ti ti-flag"></i> Limite (hoje)</button>
         <button class="btn btn-ghost btn-sm" onclick="flagarMassa('D+1',true)" style="border-color:#4A9EE8;color:#4A9EE8"><i class="ti ti-flag"></i> D+1</button>
         <button class="btn btn-ghost btn-sm" onclick="flagarMassa('adiantado',true)" style="border-color:#6DBF3E;color:#6DBF3E"><i class="ti ti-flag"></i> Adiantados</button>
         <span style="color:var(--text3);font-size:11px">|</span>
         <button class="btn btn-ghost btn-sm" onclick="flagarMassa(null,false)" style="color:var(--text3)"><i class="ti ti-flag-off"></i> Desflagar todos</button>
+      </div>
+
+      <!-- Flegar em massa por transportadora -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Flagar por transportadora:</span>
+        <select id="select-transp" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:12px;min-width:200px">
+          <option value="">Selecione...</option>
+        </select>
+        <button class="btn btn-orange btn-sm" onclick="flagarTransportadora(true)"><i class="ti ti-flag"></i> Flagar</button>
+        <button class="btn btn-ghost btn-sm" onclick="flagarTransportadora(false)"><i class="ti ti-flag-off"></i> Desflagar</button>
       </div>
 
       <div class="table-wrap" style="margin-bottom:14px">
@@ -265,7 +275,7 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th style="width:40px">Flag</th><th>Prazo</th><th>Entrega</th><th>Data Limite</th><th>Transportadora</th><th>Mega Rota</th><th>Itens</th><th>Operador</th><th>Concluído</th></tr></thead>
+            <thead><tr><th style="width:40px">Flag</th><th>Prazo</th><th>Entrega</th><th>Data Limite</th><th>Transportadora</th><th>Itens</th><th>Operador</th><th>Concluído</th></tr></thead>
             <tbody id="exp-tbody"></tbody>
           </table>
         </div>
@@ -503,9 +513,17 @@ async function carregarPedidosExpedicao() {
     const flagados = pedidos.filter(p => p.flagado).length;
     document.getElementById('exp-count').textContent = pedidos.length + ' pedido' + (pedidos.length !== 1 ? 's' : '');
     document.getElementById('exp-flag-count').textContent = flagados ? `${flagados} flagados para o operador` : '';
+
+    // Popular select de transportadoras
+    const transportadoras = [...new Set(pedidos.map(p => p.transportadora).filter(Boolean))].sort();
+    const sel = document.getElementById('select-transp');
+    const valorAtual = sel.value;
+    sel.innerHTML = '<option value="">Selecione...</option>' + transportadoras.map(t => `<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
+    if (transportadoras.includes(valorAtual)) sel.value = valorAtual;
+
     const tbody = document.getElementById('exp-tbody');
     if (!pedidos.length) {
-      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-table"><i class="ti ti-file-invoice"></i>Nenhum pedido. Importe a QRY 180.</div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-table"><i class="ti ti-file-invoice"></i>Nenhum pedido. Importe a QRY 180.</div></td></tr>';
       return;
     }
     tbody.innerHTML = pedidos.map(p => {
@@ -524,8 +542,7 @@ async function carregarPedidosExpedicao() {
         </td>
         <td style="color:var(--orange);font-weight:600">${p.entrega}</td>
         <td>${p.data_limite||'—'}</td>
-        <td style="font-size:11px;color:var(--text2);max-width:160px">${p.transportadora||'—'}</td>
-        <td><span style="font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;background:var(--blue-light);color:var(--blue)">${p.mega_rota||'—'}</span></td>
+        <td style="font-size:11px;color:var(--text2);max-width:220px">${p.transportadora||'—'}</td>
         <td style="color:var(--text3)">${itens.length} it.</td>
         <td style="font-size:11px;color:var(--text2)">${(p.operador||'—').replace('MECA_','')}</td>
         <td>${p.concluido?'<span style="color:var(--green);font-size:11px;font-weight:600">✓</span>':'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
@@ -544,6 +561,14 @@ async function flagarMassa(prazo, flagado) {
   if (prazo) body.prazo = prazo;
   const r = await api('/api/expedicao/flegar-massa', { method:'PATCH', body: JSON.stringify(body) });
   toast(r.atualizados !== undefined ? `✅ ${r.atualizados} pedidos atualizados` : '✅ Concluído');
+  carregarPedidosExpedicao();
+}
+
+async function flagarTransportadora(flagado) {
+  const transp = document.getElementById('select-transp').value;
+  if (!transp) { toast('Selecione uma transportadora'); return; }
+  const r = await api('/api/expedicao/flegar-massa', { method:'PATCH', body: JSON.stringify({ flagado, transportadora: transp }) });
+  toast(r.atualizados !== undefined ? `✅ ${r.atualizados} pedidos de "${transp}" ${flagado?'flagados':'desflagados'}` : '✅ Concluído');
   carregarPedidosExpedicao();
 }
 

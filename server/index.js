@@ -632,8 +632,11 @@ app.get('/api/expedicao/coletor', async (req, res) => {
 // Flegar em massa (ADM) — rota separada sem conflito
 app.patch('/api/expedicao/flegar-massa', autenticarAdm, async (req, res) => {
   try {
-    const { flagado, prazo } = req.body;
-    if (prazo) {
+    const { flagado, prazo, transportadora } = req.body;
+    if (transportadora) {
+      const r = await pool.query('UPDATE expedicao_pedidos SET flagado=$1 WHERE transportadora=$2', [!!flagado, transportadora]);
+      res.json({ ok: true, atualizados: r.rowCount });
+    } else if (prazo) {
       // Compensar fuso Brasil (UTC-3): subtrair 3 horas do UTC para pegar o dia correto de Brasília
       const agora = new Date();
       const brasilOffset = 3 * 60 * 60 * 1000; // UTC-3

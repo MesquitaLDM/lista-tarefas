@@ -228,7 +228,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <script>
 let username = null;
 let pedidos = [];
-let filtroRota = 'all';
+let filtroTransp = 'all';
 let pedidoParaConcluir = null;
 let tipoAtual = null; // 'leve' ou 'pesado'
 
@@ -294,7 +294,7 @@ async function verificarAcesso() {
 
 function selecionarTipo(tipo) {
   tipoAtual = tipo;
-  filtroRota = 'all';
+  filtroTransp = 'all';
   const label = document.getElementById('tipo-label');
   if (label) {
     label.textContent = tipo === 'pesado' ? '🏋️ Pesado' : '📦 Leve';
@@ -348,17 +348,17 @@ async function carregarPedidos() {
 
 function renderFiltros() {
   const porTipo = filtrarPorTipo(pedidos);
-  const rotas = ['all', ...new Set(porTipo.map(p => p.mega_rota).filter(Boolean).sort())];
-  document.getElementById('filter-bar').innerHTML = rotas.map(r =>
-    `<button class="filter-chip${filtroRota===r?' active':''}" onclick="setFiltro('${r}')">${r==='all'?'Todas':r}</button>`
+  const transportadoras = ['all', ...new Set(porTipo.map(p => p.transportadora).filter(Boolean).sort())];
+  document.getElementById('filter-bar').innerHTML = transportadoras.map(t =>
+    `<button class="filter-chip${filtroTransp===t?' active':''}" onclick="setFiltro('${t.replace(/'/g,"\\'")}')">${t==='all'?'Todas':t}</button>`
   ).join('');
 }
 
-function setFiltro(r) { filtroRota = r; renderFiltros(); renderCards(); }
+function setFiltro(t) { filtroTransp = t; renderFiltros(); renderCards(); }
 
 function renderCards() {
   const porTipo = filtrarPorTipo(pedidos);
-  const filtrado = filtroRota === 'all' ? porTipo : porTipo.filter(p => p.mega_rota === filtroRota);
+  const filtrado = filtroTransp === 'all' ? porTipo : porTipo.filter(p => p.transportadora === filtroTransp);
   const done = filtrado.filter(p => p.concluido).length;
   const total = filtrado.length;
   document.getElementById('s-total').textContent = total;
