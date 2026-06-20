@@ -275,7 +275,7 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th style="width:40px">Flag</th><th>Prazo</th><th>Entrega</th><th>Data Limite</th><th>Transportadora</th><th>Itens</th><th>Operador</th><th>Concluído</th></tr></thead>
+            <thead><tr><th style="width:40px">Flag</th><th>Prazo</th><th>Entrega</th><th>Data Limite</th><th>Transportadora</th><th>Itens</th><th>Operador</th><th>Concluído</th><th>Outras Etapas</th></tr></thead>
             <tbody id="exp-tbody"></tbody>
           </table>
         </div>
@@ -507,6 +507,16 @@ function calcPrazo(dataLimite) {
   return { label: 'Adiantado', cor: '#6DBF3E', bg: '#1a2a10' };
 }
 
+const EVENTO_LABEL_ADM = {
+  'PICKING LIBERADO': 'Pick.Lib',
+  'INICIO DE PICKING': 'Iníc.Pick',
+  'FIM DE PICKING': 'Fim Pick',
+  'NAO ROMANEADO': 'N.Roman',
+  'INCLUSAO PROGRAMA': 'Inc.Prog',
+  'EXCLUSAO ONDA': 'Exc.Onda',
+  'INICIO DE CONFERENCIA': 'Iníc.Conf'
+};
+
 async function carregarPedidosExpedicao() {
   try {
     const pedidos = await api('/api/expedicao/pedidos');
@@ -521,15 +531,34 @@ async function carregarPedidosExpedicao() {
     sel.innerHTML = '<option value="">Selecione...</option>' + transportadoras.map(t => `<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
     if (transportadoras.includes(valorAtual)) sel.value = valorAtual;
 
+    // Buscar resumo de etapas em lote
+    let resumoMap = {};
+    if (pedidos.length) {
+      const chaves = pedidos.map(p => ({ transportadora: p.transportadora, data_limite: p.data_limite }));
+      try {
+        const rResumo = await fetch('/api/expedicao/resumo-etapas-lote', {
+          method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+          body: JSON.stringify({ chaves })
+        });
+        resumoMap = await rResumo.json();
+      } catch(e) {}
+    }
+
     const tbody = document.getElementById('exp-tbody');
     if (!pedidos.length) {
-      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-table"><i class="ti ti-file-invoice"></i>Nenhum pedido. Importe a QRY 180.</div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-table"><i class="ti ti-file-invoice"></i>Nenhum pedido. Importe a QRY 180.</div></td></tr>';
       return;
     }
     tbody.innerHTML = pedidos.map(p => {
       const itens = Array.isArray(p.itens) ? p.itens : (typeof p.itens === 'string' ? JSON.parse(p.itens) : []);
       const prazo = calcPrazo(p.data_limite);
       const flagado = p.flagado === true || p.flagado === 't' || p.flagado === '1' || p.flagado === 'true';
+      const chave = p.transportadora + '|' + p.data_limite;
+      const mapa = resumoMap[chave] || {};
+      const outras = Object.entries(mapa).filter(([ev]) => ev.toUpperCase() !== 'NOTA FISCAL ACEITA');
+      const outrasHtml = outras.length
+        ? outras.map(([ev,qtd]) => `<span style="font-size:9px;font-weight:600;padding:1px 5px;border-radius:5px;background:var(--bg3);color:var(--text2);border:1px solid var(--border2);white-space:nowrap">${EVENTO_LABEL_ADM[ev.toUpperCase()]||ev}: <strong style="color:var(--blue)">${qtd}</strong></span>`).join(' ')
+        : '<span style="color:var(--text3);font-size:11px">—</span>';
       return `<tr>
         <td style="text-align:center">
           <input type="checkbox" ${flagado?'checked':''} onchange="toggleFlag('${p.id}',this.checked)"
@@ -546,6 +575,7 @@ async function carregarPedidosExpedicao() {
         <td style="color:var(--text3)">${itens.length} it.</td>
         <td style="font-size:11px;color:var(--text2)">${(p.operador||'—').replace('MECA_','')}</td>
         <td>${p.concluido?'<span style="color:var(--green);font-size:11px;font-weight:600">✓</span>':'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
+        <td><div style="display:flex;flex-wrap:wrap;gap:3px;max-width:280px">${outrasHtml}</div></td>
       </tr>`;
     }).join('');
   } catch(e) { console.error(e); }

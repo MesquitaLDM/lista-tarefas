@@ -337,13 +337,60 @@ document.getElementById('btn-trocar').addEventListener('click', () => {
   mostrar('login');
 });
 
+let resumoEtapasMap = {};
+
 async function carregarPedidos() {
   try {
     const r = await fetch('/api/expedicao/coletor?usuario=' + encodeURIComponent(username));
     pedidos = await r.json();
     renderFiltros();
+    await carregarResumoEtapas();
     renderCards();
   } catch(e) { toast('Erro ao carregar pedidos'); }
+}
+
+async function carregarResumoEtapas() {
+  try {
+    const chaves = pedidos.map(p => ({ transportadora: p.transportadora, data_limite: p.data_limite }));
+    if (!chaves.length) { resumoEtapasMap = {}; return; }
+    const r = await fetch('/api/expedicao/resumo-etapas-lote', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ chaves })
+    });
+    resumoEtapasMap = await r.json();
+  } catch(e) { resumoEtapasMap = {}; }
+}
+
+const EVENTO_LABEL = {
+  'PICKING LIBERADO': 'Picking Liberado',
+  'INICIO DE PICKING': 'Início de Picking',
+  'FIM DE PICKING': 'Fim de Picking',
+  'NOTA FISCAL ACEITA': 'Nota Fiscal Aceita',
+  'NAO ROMANEADO': 'Não Romaneado',
+  'INCLUSAO PROGRAMA': 'Inclusão Programa',
+  'EXCLUSAO ONDA': 'Exclusão Onda',
+  'INICIO DE CONFERENCIA': 'Início de Conferência'
+};
+
+function renderResumoEtapas(p) {
+  const chave = p.transportadora + '|' + p.data_limite;
+  const mapa = resumoEtapasMap[chave] || {};
+  // Remove a própria etapa "Nota Fiscal Aceita" da contagem de "outras etapas"
+  const outras = Object.entries(mapa).filter(([ev]) => ev.toUpperCase() !== 'NOTA FISCAL ACEITA');
+  if (!outras.length) return '';
+  return `
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">
+        <i class="ti ti-info-circle"></i> Mesma transportadora/data em outras etapas
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${outras.map(([ev, qtd]) => `
+          <span style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:6px;background:var(--bg3);color:var(--text2);border:1px solid var(--border2)">
+            ${EVENTO_LABEL[ev.toUpperCase()] || ev}: <strong style="color:var(--blue)">${qtd}</strong>
+          </span>`).join('')}
+      </div>
+    </div>`;
 }
 
 function renderFiltros() {
@@ -408,6 +455,7 @@ function renderCards() {
                 <div class="item-qtd">x${i.qtd||'1'}</div>
               </div>`).join('')}
           </div>
+          ${renderResumoEtapas(p)}
         </div>
       </div>
     </div>`;

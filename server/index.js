@@ -514,14 +514,16 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
       return '';
     }
 
-    // Filtrar só "NOTA FISCAL ACEITA" e excluir canais INT e PSV
-    const validos = data.filter(r => {
-      const ev = g(r, ['Evento','evento']).toUpperCase();
+    // Excluir canais INT e PSV (aplica a todas as etapas)
+    const semCanalExcluido = data.filter(r => {
       const canal = g(r, ['Canal','canal']).toUpperCase();
-      return ev === 'NOTA FISCAL ACEITA' && canal !== 'INT' && canal !== 'PSV';
+      return canal !== 'INT' && canal !== 'PSV';
     });
 
-    // Agrupar por número de entrega
+    // Linhas prontas para o operador: Nota Fiscal Aceita
+    const validos = semCanalExcluido.filter(r => g(r, ['Evento','evento']).toUpperCase() === 'NOTA FISCAL ACEITA');
+
+    // Agrupar pedidos prontos por número de entrega
     const pedidos = {};
     for (const r of validos) {
       const entrega = g(r, ['Entrega','entrega']);
@@ -551,10 +553,27 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
         qtd: g(r, ['Qtd. Peças','Qtd. pecas','Qtd'])
       });
     }
-
     const lista = Object.values(pedidos);
 
-    // Criar tabela se não existir e limpar dados anteriores
+    // Resumo de TODAS as etapas (todos os eventos), agrupado por entrega única por etapa
+    // Guarda: entrega, transportadora, data_limite, evento -> para contagem por transportadora+data+etapa
+    const entregasPorEtapa = {}; // chave: entrega+evento -> 1 linha (evita contar item duplicado)
+    for (const r of semCanalExcluido) {
+      const entrega = g(r, ['Entrega','entrega']);
+      const evento = g(r, ['Evento','evento']);
+      if (!entrega || !evento) continue;
+      const chave = entrega + '|' + evento;
+      if (entregasPorEtapa[chave]) continue;
+      entregasPorEtapa[chave] = {
+        entrega,
+        evento,
+        transportadora: g(r, ['Nome Contrato','Nome contrato','Transportadora']),
+        data_limite: g(r, ['Data Limite','Data limite'])
+      };
+    }
+    const resumoEtapas = Object.values(entregasPorEtapa);
+
+    // Criar tabelas se não existirem
     await pool.query(`
       CREATE TABLE IF NOT EXISTS expedicao_pedidos (
         id TEXT PRIMARY KEY,
@@ -582,10 +601,22 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
     `);
     await pool.query(`ALTER TABLE expedicao_pedidos ADD COLUMN IF NOT EXISTS flagado BOOLEAN DEFAULT false;`);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS expedicao_etapas_resumo (
+        id TEXT PRIMARY KEY,
+        entrega TEXT,
+        evento TEXT,
+        transportadora TEXT,
+        data_limite TEXT
+      );
+    `);
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       await client.query('DELETE FROM expedicao_pedidos');
+      await client.query('DELETE FROM expedicao_etapas_resumo');
+
       for (const p of lista) {
         await client.query(
           `INSERT INTO expedicao_pedidos (id,entrega,ped_cliente,data_limite,data_entrega,evento,dt_evento,operador,mega_rota,transportadora,uf,nf,serie,onda,log,itens)
@@ -594,6 +625,14 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
            p.operador, p.mega_rota, p.transportadora, p.uf, p.nf, p.serie, p.onda, p.log, JSON.stringify(p.itens)]
         );
       }
+
+      for (const e of resumoEtapas) {
+        await client.query(
+          `INSERT INTO expedicao_etapas_resumo (id,entrega,evento,transportadora,data_limite) VALUES ($1,$2,$3,$4,$5)`,
+          [uuidv4(), e.entrega, e.evento, e.transportadora, e.data_limite]
+        );
+      }
+
       await client.query('COMMIT');
     } catch(e) {
       await client.query('ROLLBACK');
@@ -602,7 +641,7 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
       client.release();
     }
 
-    res.json({ importados: lista.length, total_linhas: validos.length });
+    res.json({ importados: lista.length, total_linhas: validos.length, total_etapas: resumoEtapas.length });
   } catch(e) {
     res.status(500).json({ erro: 'Erro ao processar QRY 180: ' + e.message });
   }
@@ -625,6 +664,46 @@ app.get('/api/expedicao/coletor', async (req, res) => {
     res.json(rows);
   } catch(e) {
     res.json([]);
+  }
+});
+
+// Resumo de etapas por transportadora + data limite (uso geral, ADM e coletor)
+app.get('/api/expedicao/resumo-etapas', async (req, res) => {
+  try {
+    const { transportadora, data_limite } = req.query;
+    if (!transportadora || !data_limite) return res.json([]);
+    const { rows } = await pool.query(
+      `SELECT evento, COUNT(*) as total FROM expedicao_etapas_resumo
+       WHERE transportadora=$1 AND data_limite=$2
+       GROUP BY evento ORDER BY total DESC`,
+      [transportadora, data_limite]
+    );
+    res.json(rows);
+  } catch(e) {
+    res.json([]);
+  }
+});
+
+// Resumo de etapas em lote — recebe lista de {transportadora, data_limite} e devolve mapa
+app.post('/api/expedicao/resumo-etapas-lote', async (req, res) => {
+  try {
+    const { chaves } = req.body; // [{transportadora, data_limite}]
+    if (!Array.isArray(chaves) || !chaves.length) return res.json({});
+    const { rows } = await pool.query('SELECT evento, transportadora, data_limite FROM expedicao_etapas_resumo');
+    const resultado = {};
+    for (const c of chaves) {
+      const chaveStr = c.transportadora + '|' + c.data_limite;
+      if (!resultado[chaveStr]) resultado[chaveStr] = {};
+    }
+    for (const r of rows) {
+      const chaveStr = r.transportadora + '|' + r.data_limite;
+      if (resultado[chaveStr] !== undefined) {
+        resultado[chaveStr][r.evento] = (resultado[chaveStr][r.evento] || 0) + 1;
+      }
+    }
+    res.json(resultado);
+  } catch(e) {
+    res.json({});
   }
 });
 
