@@ -423,18 +423,8 @@ function adaptarUI() {
     const verExp = isAdmCentral() || papelAtual === 'adm_expedicao';
     tabExp.style.display = verExp ? 'block' : 'none';
   }
-  // Link "Ver coletor" aponta para a tela correta do setor
-  const btnColetor = document.getElementById('btn-ver-coletor');
-  if (btnColetor) {
-    const mapaSetor = {
-      adm_armazenagem: '/coletor',
-      adm_expedicao: '/expedicao-coletor',
-      adm_faturamento: '/faturamento',
-      adm_central: '/coletor',
-      adm: '/coletor'
-    };
-    btnColetor.href = mapaSetor[papelAtual] || '/coletor';
-  }
+  // Link "Ver coletor" — ajustado também ao trocar de aba
+  atualizarLinkColetor('listas');
 }
 
 function mostrarLogin() {
@@ -487,6 +477,23 @@ function switchView(view) {
   document.getElementById('view-expedicao').classList.toggle('active', view==='expedicao');
   if (view === 'usuarios') carregarUsuarios();
   if (view === 'expedicao') carregarPedidosExpedicao();
+  atualizarLinkColetor(view);
+}
+
+function atualizarLinkColetor(viewAtiva) {
+  const btnColetor = document.getElementById('btn-ver-coletor');
+  if (!btnColetor) return;
+  // Se estiver na aba Expedição, sempre aponta pro coletor de expedição
+  if (viewAtiva === 'expedicao') { btnColetor.href = '/expedicao-coletor'; return; }
+  // Senão, usa o setor do ADM logado (ou armazenagem por padrão pra central)
+  const mapaSetor = {
+    adm_armazenagem: '/coletor',
+    adm_expedicao: '/expedicao-coletor',
+    adm_faturamento: '/faturamento',
+    adm_central: '/coletor',
+    adm: '/coletor'
+  };
+  btnColetor.href = mapaSetor[papelAtual] || '/coletor';
 }
 
 function calcPrazo(dataLimite) {
