@@ -538,7 +538,7 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
           dt_evento: g(r, ['Dt Evento','Dt. Evento']),
           operador: g(r, ['Operador','operador']),
           mega_rota: g(r, ['Mega Rota','Mega rota','MegaRota']),
-          transportadora: g(r, ['Nome Contrato','Nome contrato','Transportadora']),
+          transportadora: (g(r, ['Nome_1']) || g(r, ['Nome Contrato','Nome contrato'])).replace(/_x000D_/g,'').trim(),
           uf: g(r, ['Uf','UF']),
           nf: g(r, ['Nf.','NF','nf']),
           serie: g(r, ['Serie','Série','serie']),
@@ -567,7 +567,7 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
       entregasPorEtapa[chave] = {
         entrega,
         evento,
-        transportadora: g(r, ['Nome Contrato','Nome contrato','Transportadora']),
+        transportadora: (g(r, ['Nome_1']) || g(r, ['Nome Contrato','Nome contrato'])).replace(/_x000D_/g,'').trim(),
         data_limite: g(r, ['Data Limite','Data limite'])
       };
     }
