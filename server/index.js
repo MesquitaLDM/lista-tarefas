@@ -545,6 +545,13 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
     // Linhas prontas: Nota Fiscal Aceita
     const validos = semCanalExcluido.filter(r => getCel(r, ['Evento']).toUpperCase() === 'NOTA FISCAL ACEITA');
 
+    // Índice fixo da coluna Y (transportadora = Nome, posição 25)
+    const COL_TRANSP = 25;
+    function getTransp(row) {
+      const v = row.getCell(COL_TRANSP).value;
+      return v ? String(v).replace(/_x000D_|\r/g,'').trim() : '';
+    }
+
     // Agrupar pedidos prontos por número de entrega
     const pedidos = {};
     for (const r of validos) {
@@ -560,7 +567,7 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
           dt_evento: getCel(r, ['Dt Evento','Dt. Evento']),
           operador: getCel(r, ['Operador']),
           mega_rota: getCel(r, ['Mega Rota','Mega rota','MegaRota']),
-          transportadora: getCel(r, ['Nome_1','Nome 1']) || getCel(r, ['Nome Contrato','Nome contrato']),
+          transportadora: getTransp(r) || getCel(r, ['Nome Contrato','Nome contrato']),
           uf: getCel(r, ['Uf','UF']),
           nf: getCel(r, ['Nf.','NF']),
           serie: getCel(r, ['Serie','Série']),
@@ -585,14 +592,10 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
       if (!entrega || !evento) continue;
       const chave = entrega + '|' + evento;
       if (entregasPorEtapa[chave]) continue;
-      // Transportadora: coluna Y é a 25ª coluna (índice fixo)
-      const nomeY = ws.getRow(2) ? String(ws.getRow(2).getCell(25).value || '').replace(/_x000D_|\r/g,'').trim() : '';
-      let transp = r.getCell(25) ? String(r.getCell(25).value || '').replace(/_x000D_|\r/g,'').trim() : '';
-      if (!transp) transp = getCel(r, ['Nome Contrato','Nome contrato']);
       entregasPorEtapa[chave] = {
         entrega,
         evento,
-        transportadora: transp,
+        transportadora: getTransp(r) || getCel(r, ['Nome Contrato','Nome contrato']),
         data_limite: getCel(r, ['Data Limite','Data limite'])
       };
     }
