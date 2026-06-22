@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
@@ -505,70 +506,94 @@ app.get('/api/locais-altos', autenticarAdm, async (req, res) => {
 // Importar QRY 180 (ADM de expedição)
 app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async (req, res) => {
   try {
-    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    // Usar ExcelJS que suporta arquivos grandes sem corrupção
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(req.file.buffer);
+    const ws = wb.worksheets[0];
 
-    function g(row, keys) {
-      for (const k of keys) if (row[k] !== undefined && row[k] !== '') return String(row[k]).trim();
+    // Ler cabeçalhos da primeira linha
+    const headers = {};
+    ws.getRow(1).eachCell((cell, col) => { headers[col] = String(cell.value || '').trim(); });
+
+    // Mapear colunas por nome
+    const colIdx = {};
+    Object.entries(headers).forEach(([col, nome]) => { colIdx[nome] = parseInt(col); });
+
+    function getCel(row, nomes) {
+      for (const n of nomes) {
+        if (colIdx[n] !== undefined) {
+          const v = row.getCell(colIdx[n]).value;
+          if (v !== null && v !== undefined && v !== '') return String(v).replace(/_x000D_|\r/g,'').trim();
+        }
+      }
       return '';
     }
 
-    // Excluir canais INT e PSV (aplica a todas as etapas)
+    // Processar linhas
+    const data = [];
+    ws.eachRow((row, rowNum) => {
+      if (rowNum === 1) return;
+      data.push(row);
+    });
+
+    // Excluir canais INT e PSV
     const semCanalExcluido = data.filter(r => {
-      const canal = g(r, ['Canal','canal']).toUpperCase();
+      const canal = getCel(r, ['Canal']).toUpperCase();
       return canal !== 'INT' && canal !== 'PSV';
     });
 
-    // Linhas prontas para o operador: Nota Fiscal Aceita
-    const validos = semCanalExcluido.filter(r => g(r, ['Evento','evento']).toUpperCase() === 'NOTA FISCAL ACEITA');
+    // Linhas prontas: Nota Fiscal Aceita
+    const validos = semCanalExcluido.filter(r => getCel(r, ['Evento']).toUpperCase() === 'NOTA FISCAL ACEITA');
 
     // Agrupar pedidos prontos por número de entrega
     const pedidos = {};
     for (const r of validos) {
-      const entrega = g(r, ['Entrega','entrega']);
+      const entrega = getCel(r, ['Entrega']);
       if (!entrega) continue;
       if (!pedidos[entrega]) {
         pedidos[entrega] = {
           entrega,
-          ped_cliente: g(r, ['Ped. Cliente','Ped.Cliente']),
-          data_limite: g(r, ['Data Limite','Data limite']),
-          data_entrega: g(r, ['Data entrega','Data Entrega']),
-          evento: g(r, ['Evento','evento']),
-          dt_evento: g(r, ['Dt Evento','Dt. Evento']),
-          operador: g(r, ['Operador','operador']),
-          mega_rota: g(r, ['Mega Rota','Mega rota','MegaRota']),
-          transportadora: (g(r, ['Nome_1']) || g(r, ['Nome Contrato','Nome contrato'])).replace(/_x000D_/g,'').trim(),
-          uf: g(r, ['Uf','UF']),
-          nf: g(r, ['Nf.','NF','nf']),
-          serie: g(r, ['Serie','Série','serie']),
-          onda: g(r, ['Onda','onda']),
-          log: g(r, ['Grupo Classe Local','LOG']),
+          ped_cliente: getCel(r, ['Ped. Cliente','Ped.Cliente']),
+          data_limite: getCel(r, ['Data Limite','Data limite']),
+          data_entrega: getCel(r, ['Data entrega','Data Entrega']),
+          evento: getCel(r, ['Evento']),
+          dt_evento: getCel(r, ['Dt Evento','Dt. Evento']),
+          operador: getCel(r, ['Operador']),
+          mega_rota: getCel(r, ['Mega Rota','Mega rota','MegaRota']),
+          transportadora: getCel(r, ['Nome_1','Nome 1']) || getCel(r, ['Nome Contrato','Nome contrato']),
+          uf: getCel(r, ['Uf','UF']),
+          nf: getCel(r, ['Nf.','NF']),
+          serie: getCel(r, ['Serie','Série']),
+          onda: getCel(r, ['Onda']),
+          log: getCel(r, ['Grupo Classe Local']),
           itens: []
         };
       }
       pedidos[entrega].itens.push({
-        sku: g(r, ['Item','item']),
-        nome: g(r, ['Nome','nome']),
-        qtd: g(r, ['Qtd. Peças','Qtd. pecas','Qtd'])
+        sku: getCel(r, ['Item']),
+        nome: getCel(r, ['Nome']),
+        qtd: getCel(r, ['Qtd. Peças','Qtd. pecas','Qtd'])
       });
     }
     const lista = Object.values(pedidos);
 
-    // Resumo de TODAS as etapas (todos os eventos), agrupado por entrega única por etapa
-    // Guarda: entrega, transportadora, data_limite, evento -> para contagem por transportadora+data+etapa
-    const entregasPorEtapa = {}; // chave: entrega+evento -> 1 linha (evita contar item duplicado)
+    // Resumo de todas as etapas por entrega única
+    const entregasPorEtapa = {};
     for (const r of semCanalExcluido) {
-      const entrega = g(r, ['Entrega','entrega']);
-      const evento = g(r, ['Evento','evento']);
+      const entrega = getCel(r, ['Entrega']);
+      const evento = getCel(r, ['Evento']);
       if (!entrega || !evento) continue;
       const chave = entrega + '|' + evento;
       if (entregasPorEtapa[chave]) continue;
+      // Transportadora: coluna Y é a 25ª coluna (índice fixo)
+      const nomeY = ws.getRow(2) ? String(ws.getRow(2).getCell(25).value || '').replace(/_x000D_|\r/g,'').trim() : '';
+      let transp = r.getCell(25) ? String(r.getCell(25).value || '').replace(/_x000D_|\r/g,'').trim() : '';
+      if (!transp) transp = getCel(r, ['Nome Contrato','Nome contrato']);
       entregasPorEtapa[chave] = {
         entrega,
         evento,
-        transportadora: (g(r, ['Nome_1']) || g(r, ['Nome Contrato','Nome contrato'])).replace(/_x000D_/g,'').trim(),
-        data_limite: g(r, ['Data Limite','Data limite'])
+        transportadora: transp,
+        data_limite: getCel(r, ['Data Limite','Data limite'])
       };
     }
     const resumoEtapas = Object.values(entregasPorEtapa);
