@@ -730,9 +730,14 @@ app.get('/api/expedicao/resumo-etapas', async (req, res) => {
 // Resumo de etapas em lote — recebe lista de {transportadora, data_limite} e devolve mapa
 app.post('/api/expedicao/resumo-etapas-lote', async (req, res) => {
   try {
-    const { chaves } = req.body; // [{transportadora, data_limite}]
+    const { chaves } = req.body;
     if (!Array.isArray(chaves) || !chaves.length) return res.json({});
+
     const { rows } = await pool.query('SELECT evento, transportadora, data_limite FROM expedicao_etapas_resumo');
+    console.log(`[RESUMO] total linhas na tabela: ${rows.length}, chaves pedidas: ${chaves.length}`);
+    if (rows.length > 0) console.log(`[RESUMO] exemplo:`, rows[0]);
+    if (chaves.length > 0) console.log(`[RESUMO] chave pedida exemplo:`, chaves[0]);
+
     const resultado = {};
     for (const c of chaves) {
       const chaveStr = c.transportadora + '|' + c.data_limite;
@@ -744,8 +749,11 @@ app.post('/api/expedicao/resumo-etapas-lote', async (req, res) => {
         resultado[chaveStr][r.evento] = (resultado[chaveStr][r.evento] || 0) + 1;
       }
     }
+    const comDados = Object.values(resultado).filter(v => Object.keys(v).length > 0).length;
+    console.log(`[RESUMO] chaves com dados: ${comDados}/${Object.keys(resultado).length}`);
     res.json(resultado);
   } catch(e) {
+    console.error('[RESUMO] erro:', e.message);
     res.json({});
   }
 });
