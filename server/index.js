@@ -98,7 +98,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, '../public')));
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB
 
 // ── AUTH HELPERS ─────────────────────────────────────────
 
@@ -617,20 +617,35 @@ app.post('/api/expedicao/importar', autenticarAdm, upload.single('file'), async 
       await client.query('DELETE FROM expedicao_pedidos');
       await client.query('DELETE FROM expedicao_etapas_resumo');
 
-      for (const p of lista) {
-        await client.query(
-          `INSERT INTO expedicao_pedidos (id,entrega,ped_cliente,data_limite,data_entrega,evento,dt_evento,operador,mega_rota,transportadora,uf,nf,serie,onda,log,itens)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-          [uuidv4(), p.entrega, p.ped_cliente, p.data_limite, p.data_entrega, p.evento, p.dt_evento,
-           p.operador, p.mega_rota, p.transportadora, p.uf, p.nf, p.serie, p.onda, p.log, JSON.stringify(p.itens)]
-        );
+      // Inserir pedidos em lote (muito mais rápido que um INSERT por vez)
+      if (lista.length) {
+        const LOTE = 200;
+        for (let i = 0; i < lista.length; i += LOTE) {
+          const lote = lista.slice(i, i + LOTE);
+          const valores = lote.map((p, j) => {
+            const base = j * 16;
+            return `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15},$${base+16})`;
+          }).join(',');
+          const params = lote.flatMap(p => [
+            uuidv4(), p.entrega, p.ped_cliente, p.data_limite, p.data_entrega, p.evento, p.dt_evento,
+            p.operador, p.mega_rota, p.transportadora, p.uf, p.nf, p.serie, p.onda, p.log, JSON.stringify(p.itens)
+          ]);
+          await client.query(
+            `INSERT INTO expedicao_pedidos (id,entrega,ped_cliente,data_limite,data_entrega,evento,dt_evento,operador,mega_rota,transportadora,uf,nf,serie,onda,log,itens) VALUES ${valores}`,
+            params
+          );
+        }
       }
 
-      for (const e of resumoEtapas) {
-        await client.query(
-          `INSERT INTO expedicao_etapas_resumo (id,entrega,evento,transportadora,data_limite) VALUES ($1,$2,$3,$4,$5)`,
-          [uuidv4(), e.entrega, e.evento, e.transportadora, e.data_limite]
-        );
+      // Inserir resumo de etapas em lote
+      if (resumoEtapas.length) {
+        const LOTE = 500;
+        for (let i = 0; i < resumoEtapas.length; i += LOTE) {
+          const lote = resumoEtapas.slice(i, i + LOTE);
+          const valores = lote.map((_, j) => `($${j*5+1},$${j*5+2},$${j*5+3},$${j*5+4},$${j*5+5})`).join(',');
+          const params = lote.flatMap(e => [uuidv4(), e.entrega, e.evento, e.transportadora, e.data_limite]);
+          await client.query(`INSERT INTO expedicao_etapas_resumo (id,entrega,evento,transportadora,data_limite) VALUES ${valores}`, params);
+        }
       }
 
       await client.query('COMMIT');
