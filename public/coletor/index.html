@@ -184,6 +184,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>
   </div>
 
+  <!-- BANNER PRIORIDADE ALTA -->
+  <div id="banner-alta" style="display:none;background:#2a1a00;border-bottom:2px solid var(--orange);padding:10px 14px;display:flex;align-items:center;gap:10px">
+    <i class="ti ti-alert-triangle" style="color:var(--orange);font-size:20px;flex-shrink:0"></i>
+    <div>
+      <div style="font-size:13px;font-weight:700;color:var(--orange)">⚠️ Prioridade Alta ativa!</div>
+      <div style="font-size:11px;color:var(--text2)">Conclua estes itens antes de continuar com a lista normal.</div>
+    </div>
+  </div>
+
   <div class="stats-bar">
     <div class="stat-item"><div class="stat-val" id="s-total">0</div><div class="stat-label">Total</div></div>
     <div class="stat-item"><div class="stat-val" id="s-done" style="color:var(--green)">0</div><div class="stat-label">Feitos</div></div>
@@ -251,6 +260,8 @@ let username = null;
 let grupos = [];
 let activeLog = 'all';
 let mainTab = 'pendentes';
+let temAlta = false;
+let _eraAlta = false;
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -296,9 +307,25 @@ document.getElementById('login-user').addEventListener('keydown', e => { if (e.k
 async function carregarItens() {
   if (!username) return;
   const r = await fetch('/api/coletor/itens?usuario=' + encodeURIComponent(username));
-  grupos = await r.json();
+  const data = await r.json();
+  // Suporte ao novo formato {listas, tem_alta} e ao formato antigo (array)
+  if (Array.isArray(data)) {
+    grupos = data;
+    temAlta = false;
+  } else {
+    grupos = data.listas || [];
+    temAlta = data.tem_alta || false;
+  }
+  // Mostrar/ocultar banner de prioridade alta
+  const banner = document.getElementById('banner-alta');
+  if (banner) banner.style.display = temAlta ? 'flex' : 'none';
   renderLogTabs();
   renderAll();
+  // Toast ao voltar para normal
+  if (!temAlta && _eraAlta) {
+    toast('✅ Prioridade Alta concluída! Retomando lista normal.');
+  }
+  _eraAlta = temAlta;
 }
 
 function todosItensFlat() { return grupos.flatMap(g => g.itens); }

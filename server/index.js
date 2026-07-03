@@ -56,6 +56,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE listas ADD COLUMN IF NOT EXISTS setor TEXT DEFAULT 'armazenagem';`);
   await pool.query(`ALTER TABLE itens ADD COLUMN IF NOT EXISTS tarefa_gerada BOOLEAN DEFAULT false;`);
   await pool.query(`ALTER TABLE itens ADD COLUMN IF NOT EXISTS tarefa_em TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE listas ADD COLUMN IF NOT EXISTS prioridade TEXT DEFAULT 'normal';`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -278,10 +279,13 @@ app.get('/api/listas', autenticarAdm, async (req, res) => {
 
 app.post('/api/listas', autenticarAdm, async (req, res) => {
   try {
-    const { nome } = req.body;
+    const { nome, prioridade } = req.body;
     const id = uuidv4();
     const setor = req.setorAdm || 'armazenagem';
-    await pool.query('INSERT INTO listas (id, nome, setor) VALUES ($1,$2,$3)', [id, nome || 'Nova lista', setor]);
+    await pool.query(
+      'INSERT INTO listas (id, nome, setor, prioridade) VALUES ($1,$2,$3,$4)',
+      [id, nome || 'Nova lista', setor, prioridade || 'normal']
+    );
     res.json({ id });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
@@ -301,6 +305,14 @@ app.patch('/api/listas/:id/publicar', autenticarAdm, async (req, res) => {
   try {
     const { publicado } = req.body;
     await pool.query('UPDATE listas SET publicado=$1 WHERE id=$2', [!!publicado, req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+app.patch('/api/listas/:id/prioridade', autenticarAdm, async (req, res) => {
+  try {
+    const { prioridade } = req.body;
+    await pool.query('UPDATE listas SET prioridade=$1 WHERE id=$2', [prioridade, req.params.id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
@@ -369,16 +381,38 @@ app.get('/api/coletor/itens', async (req, res) => {
     const { usuario } = req.query;
     if (!usuario) return res.status(400).json({ erro: 'Informe o usuário' });
 
-    const { rows: listas } = await pool.query('SELECT * FROM listas WHERE publicado=true ORDER BY criado_em DESC');
+    // Buscar todas as listas publicadas
+    const { rows: listas } = await pool.query(
+      "SELECT * FROM listas WHERE publicado=true ORDER BY criado_em DESC"
+    );
+
+    // Verificar se há alguma lista de ALTA prioridade com itens deste operador
+    let temAlta = false;
+    for (const l of listas) {
+      if ((l.prioridade || 'normal') === 'alta') {
+        const { rows } = await pool.query(
+          'SELECT COUNT(*) FROM itens WHERE lista_id=$1 AND usuario=$2 AND feito=false',
+          [l.id, usuario]
+        );
+        if (parseInt(rows[0].count) > 0) { temAlta = true; break; }
+      }
+    }
+
+    // Filtrar listas: se há alta, mostrar só alta; senão, só normal
     const resultado = [];
     for (const l of listas) {
+      const prioridade = l.prioridade || 'normal';
+      if (temAlta && prioridade !== 'alta') continue;
+      if (!temAlta && prioridade === 'alta') continue;
+
       const { rows: itens } = await pool.query(
         'SELECT * FROM itens WHERE lista_id=$1 AND usuario=$2 ORDER BY local_origem, sku',
         [l.id, usuario]
       );
-      if (itens.length) resultado.push({ id: l.id, nome: l.nome, itens });
+      if (itens.length) resultado.push({ id: l.id, nome: l.nome, prioridade, itens });
     }
-    res.json(resultado);
+
+    res.json({ listas: resultado, tem_alta: temAlta });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 

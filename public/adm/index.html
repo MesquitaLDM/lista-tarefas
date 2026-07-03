@@ -319,9 +319,22 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
 <div class="modal-overlay" id="modal-lista">
   <div class="modal" style="max-width:360px">
     <h3>Nova lista</h3>
-    <div style="margin-bottom:16px">
+    <div style="margin-bottom:12px">
       <label>Nome da lista</label>
       <input id="f-lista-nome" placeholder="Ex: Ressuprimento 05/06">
+    </div>
+    <div style="margin-bottom:16px">
+      <label>Prioridade</label>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;border:2px solid var(--border2);cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);transition:all .15s" id="prio-normal-label">
+          <input type="radio" name="f-prioridade" value="normal" id="prio-normal" checked style="accent-color:var(--orange)">
+          <i class="ti ti-list-check"></i> Normal
+        </label>
+        <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;border:2px solid var(--border2);cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);transition:all .15s" id="prio-alta-label">
+          <input type="radio" name="f-prioridade" value="alta" id="prio-alta" style="accent-color:var(--orange)">
+          <i class="ti ti-alert-triangle" style="color:var(--orange)"></i> Alta
+        </label>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="document.getElementById('modal-lista').classList.remove('open')">Cancelar</button>
@@ -643,15 +656,22 @@ async function carregarSidebar() {
   const listas = await api('/api/listas');
   const el = document.getElementById('sidebar-listas');
   if (!listas.length) { el.innerHTML = '<div class="empty-sidebar">Nenhuma lista criada</div>'; return; }
-  el.innerHTML = listas.map(l => `
+  el.innerHTML = listas.map(l => {
+    const isAlta = l.prioridade === 'alta';
+    const prioBadge = isAlta
+      ? '<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--orange-light);color:var(--orange);border:1px solid var(--orange-dark);text-transform:uppercase">Alta</span>'
+      : '';
+    return `
     <div class="lista-item${listaAtual?.id===l.id?' active':''}" onclick="abrirLista('${l.id}')">
-      <div class="lista-nome">${l.nome}${l.publicado?'<span class="pub-badge">✓ Live</span>':''}</div>
+      <div class="lista-nome">${l.nome} ${prioBadge}${l.publicado?'<span class="pub-badge">✓ Live</span>':''}</div>
       <div class="lista-meta">${l.total} itens · ${l.feitos} feitos · ${new Date(l.criado_em).toLocaleDateString('pt-BR')}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function novaLista() {
   document.getElementById('f-lista-nome').value = '';
+  document.getElementById('prio-normal').checked = true;
   document.getElementById('modal-lista').classList.add('open');
   setTimeout(() => document.getElementById('f-lista-nome').focus(), 50);
 }
@@ -659,7 +679,8 @@ function novaLista() {
 async function criarLista() {
   const nome = document.getElementById('f-lista-nome').value.trim();
   if (!nome) { toast('Informe um nome para a lista'); return; }
-  const r = await api('/api/listas', { method:'POST', body: JSON.stringify({ nome }) });
+  const prioridade = document.querySelector('input[name="f-prioridade"]:checked')?.value || 'normal';
+  const r = await api('/api/listas', { method:'POST', body: JSON.stringify({ nome, prioridade }) });
   document.getElementById('modal-lista').classList.remove('open');
   await carregarSidebar();
   abrirLista(r.id);
@@ -678,6 +699,15 @@ async function deletarLista() {
   await api('/api/listas/' + listaAtual.id, { method: 'DELETE' });
   listaAtual = null;
   document.getElementById('content').innerHTML = '<div class="placeholder"><i class="ti ti-clipboard"></i><p>Selecione ou crie uma lista</p></div>';
+  carregarSidebar();
+}
+
+async function togglePrioridade() {
+  const nova = listaAtual.prioridade === 'alta' ? 'normal' : 'alta';
+  await api('/api/listas/' + listaAtual.id + '/prioridade', { method:'PATCH', body: JSON.stringify({ prioridade: nova }) });
+  listaAtual.prioridade = nova;
+  toast(nova === 'alta' ? '⚠️ Lista marcada como Prioridade Alta!' : '✅ Lista voltou para Prioridade Normal');
+  renderContent();
   carregarSidebar();
 }
 
@@ -807,9 +837,13 @@ function renderContent() {
     <div class="card-row">
       <div>
         <h2>${l.nome}</h2>
-        <p>Criada em ${new Date(l.criado_em).toLocaleDateString('pt-BR')} · ${l.publicado?'<span style="color:var(--green);font-weight:600">● Publicada</span>':'<span style="color:var(--text3)">● Não publicada</span>'}</p>
+        <p>Criada em ${new Date(l.criado_em).toLocaleDateString('pt-BR')} · ${l.publicado?'<span style="color:var(--green);font-weight:600">● Publicada</span>':'<span style="color:var(--text3)">● Não publicada</span>'} · 
+        <span style="font-weight:700;color:${l.prioridade==='alta'?'var(--orange)':'var(--text3)'}">${l.prioridade==='alta'?'⚠️ Prioridade Alta':'Prioridade Normal'}</span></p>
       </div>
       <div class="card-row-right">
+        <button class="btn btn-sm ${l.prioridade==='alta'?'btn-ghost':'btn-orange'}" onclick="togglePrioridade()" title="${l.prioridade==='alta'?'Voltar para Normal':'Marcar como Alta'}">
+          <i class="ti ti-alert-triangle"></i> ${l.prioridade==='alta'?'Normal':'Alta'}
+        </button>
         <button class="btn btn-danger btn-sm" onclick="deletarLista()"><i class="ti ti-trash"></i> Excluir</button>
         <button class="btn ${l.publicado?'btn-ghost':'btn-green'} btn-sm" onclick="togglePublicar()">
           <i class="ti ti-${l.publicado?'eye-off':'send'}"></i> ${l.publicado?'Despublicar':'Publicar para coletor'}
