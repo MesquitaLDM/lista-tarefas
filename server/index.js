@@ -381,24 +381,21 @@ app.get('/api/coletor/itens', async (req, res) => {
     const { usuario } = req.query;
     if (!usuario) return res.status(400).json({ erro: 'Informe o usuário' });
 
-    // Buscar todas as listas publicadas
     const { rows: listas } = await pool.query(
       "SELECT * FROM listas WHERE publicado=true ORDER BY criado_em DESC"
     );
 
-    // Verificar se há alguma lista de ALTA prioridade com itens deste operador
     let temAlta = false;
     for (const l of listas) {
       if ((l.prioridade || 'normal') === 'alta') {
         const { rows } = await pool.query(
-          'SELECT COUNT(*) FROM itens WHERE lista_id=$1 AND usuario=$2 AND feito=false',
+          'SELECT COUNT(*) FROM itens WHERE lista_id=$1 AND LOWER(usuario)=LOWER($2) AND feito=false',
           [l.id, usuario]
         );
         if (parseInt(rows[0].count) > 0) { temAlta = true; break; }
       }
     }
 
-    // Filtrar listas: se há alta, mostrar só alta; senão, só normal
     const resultado = [];
     for (const l of listas) {
       const prioridade = l.prioridade || 'normal';
@@ -406,7 +403,7 @@ app.get('/api/coletor/itens', async (req, res) => {
       if (!temAlta && prioridade === 'alta') continue;
 
       const { rows: itens } = await pool.query(
-        'SELECT * FROM itens WHERE lista_id=$1 AND usuario=$2 ORDER BY local_origem, sku',
+        'SELECT * FROM itens WHERE lista_id=$1 AND LOWER(usuario)=LOWER($2) ORDER BY local_origem, sku',
         [l.id, usuario]
       );
       if (itens.length) resultado.push({ id: l.id, nome: l.nome, prioridade, itens });
@@ -800,7 +797,6 @@ app.patch('/api/expedicao/flegar-massa', autenticarAdm, async (req, res) => {
       const hojeUTC = Date.UTC(agoraBrasil.getUTCFullYear(), agoraBrasil.getUTCMonth(), agoraBrasil.getUTCDate());
       const amanhaUTC = hojeUTC + 86400000;
 
-      console.log(`[FLEGAR] prazo=${prazo} | hojeUTC=${new Date(hojeUTC).toISOString().split('T')[0]} | agoraBrasil=${agoraBrasil.toISOString()}`);
 
       const { rows } = await pool.query('SELECT id, data_limite FROM expedicao_pedidos');
       const ids = rows.filter(p => {
