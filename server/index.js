@@ -169,7 +169,7 @@ app.post('/api/coletor/login', async (req, res) => {
   try {
     const { username } = req.body;
     if (!username) return res.status(400).json({ erro: 'Informe o usuário' });
-    const { rows } = await pool.query('SELECT * FROM usuarios WHERE username=$1', [username.trim()]);
+    const { rows } = await pool.query('SELECT * FROM usuarios WHERE LOWER(username)=LOWER($1)', [username.trim()]);
     if (!rows.length) return res.status(401).json({ erro: 'Usuário não encontrado' });
     const u = rows[0];
     let acessos = [];
@@ -183,7 +183,7 @@ app.get('/api/coletor/acesso/:setor', async (req, res) => {
   try {
     const { usuario } = req.query;
     if (!usuario) return res.status(400).json({ erro: 'Informe o usuário' });
-    const { rows } = await pool.query('SELECT acessos, papel FROM usuarios WHERE username=$1', [usuario]);
+    const { rows } = await pool.query('SELECT acessos, papel FROM usuarios WHERE LOWER(username)=LOWER($1)', [usuario]);
     if (!rows.length) return res.json({ permitido: false });
     const u = rows[0];
     if (u.papel === 'adm' || u.papel === 'adm_central') return res.json({ permitido: true }); // ADM central acessa tudo
