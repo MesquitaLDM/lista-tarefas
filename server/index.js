@@ -524,6 +524,67 @@ app.post('/api/locais-altos/importar', autenticarAdm, upload.single('file'), asy
   }
 });
 
+// ── TRANSITÓRIOS — COMPACTADOR ───────────────────────────────
+
+// Criar tabela de locais baixos se não existir
+pool.query(`
+  CREATE TABLE IF NOT EXISTS transitorio_locais (
+    id TEXT PRIMARY KEY,
+    sku TEXT,
+    descricao TEXT,
+    ean TEXT,
+    local TEXT,
+    tipo_local TEXT,
+    qtd INTEGER DEFAULT 0,
+    disponivel INTEGER DEFAULT 0,
+    importado_em TIMESTAMPTZ DEFAULT now()
+  );
+`).catch(console.error);
+
+// Importar planilha de locais baixos
+app.post('/api/transitorio/importar', autenticarAdm, async (req, res) => {
+  try {
+    const { registros } = req.body;
+    if (!Array.isArray(registros) || !registros.length)
+      return res.status(400).json({ erro: 'Nenhum registro enviado' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM transitorio_locais');
+      const LOTE = 200;
+      for (let i = 0; i < registros.length; i += LOTE) {
+        const lote = registros.slice(i, i + LOTE);
+        const vals = lote.map((_, j) =>
+          `($${j*8+1},$${j*8+2},$${j*8+3},$${j*8+4},$${j*8+5},$${j*8+6},$${j*8+7},$${j*8+8})`
+        ).join(',');
+        const params = lote.flatMap(r => [
+          uuidv4(), r.sku, r.descricao, r.ean, r.local, r.tipo_local,
+          r.qtd || 0, r.disponivel || 0
+        ]);
+        await client.query(
+          `INSERT INTO transitorio_locais (id,sku,descricao,ean,local,tipo_local,qtd,disponivel) VALUES ${vals}`,
+          params
+        );
+      }
+      await client.query('COMMIT');
+    } catch(e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally { client.release(); }
+
+    res.json({ ok: true, importados: registros.length });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Buscar todos os locais (para o frontend carregar)
+app.get('/api/transitorio/locais', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM transitorio_locais ORDER BY sku, local');
+    res.json(rows);
+  } catch(e) { res.json([]); }
+});
+
 // Total de locais altos cadastrados
 app.get('/api/locais-altos', autenticarAdm, async (req, res) => {
   try {
@@ -860,6 +921,7 @@ app.get('/coletor/*', (req, res) => res.sendFile(path.join(__dirname, '../public
 app.get('/curva-abc', (req, res) => res.sendFile(path.join(__dirname, '../public/curva-abc/index.html')));
 app.get('/curva-abc/*', (req, res) => res.sendFile(path.join(__dirname, '../public/curva-abc/index.html')));
 app.get('/armazenagem', (req, res) => res.sendFile(path.join(__dirname, '../public/armazenagem/index.html')));
+app.get('/transitorio', (req, res) => res.sendFile(path.join(__dirname, '../public/transitorio/index.html')));
 app.get('/faturamento', (req, res) => res.sendFile(path.join(__dirname, '../public/faturamento/index.html')));
 app.get('/expedicao', (req, res) => res.sendFile(path.join(__dirname, '../public/expedicao/index.html')));
 app.get('/expedicao-coletor', (req, res) => res.sendFile(path.join(__dirname, '../public/expedicao-coletor/index.html')));
