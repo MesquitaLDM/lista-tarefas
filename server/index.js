@@ -541,8 +541,8 @@ pool.query(`
   );
 `).catch(console.error);
 
-// Importar planilha de locais baixos
-app.post('/api/transitorio/importar', autenticarAdm, async (req, res) => {
+// Importar planilha de locais baixos (qualquer usuário autenticado)
+app.post('/api/transitorio/importar', async (req, res) => {
   try {
     const { registros } = req.body;
     if (!Array.isArray(registros) || !registros.length)
