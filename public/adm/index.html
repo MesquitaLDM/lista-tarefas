@@ -196,6 +196,7 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
     <button class="top-tab active" onclick="switchView('listas')"><i class="ti ti-list-check"></i> Listas</button>
     <button class="top-tab" onclick="switchView('usuarios')"><i class="ti ti-users"></i> Usuários</button>
     <button class="top-tab" onclick="switchView('expedicao')" id="tab-expedicao"><i class="ti ti-truck-delivery"></i> Expedição</button>
+    <button class="top-tab" onclick="switchView('transitorio')" id="tab-transitorio"><i class="ti ti-arrows-transfer-up"></i> Transitórios</button>
   </div>
 
   <!-- VIEW LISTAS -->
@@ -291,6 +292,49 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
 </div>
 
 <input type="file" id="qry180-input" accept=".xlsx,.xls" style="display:none">
+
+  <!-- VIEW TRANSITÓRIOS -->
+  <div class="view" id="view-transitorio">
+    <div class="users-wrap" style="max-width:700px">
+      <div class="card-row" style="margin-bottom:14px">
+        <div>
+          <h2>Transitórios — Locais Baixos</h2>
+          <p>Importe a planilha de locais baixos para que os operadores possam bipar EANs no compactador</p>
+        </div>
+      </div>
+      <div id="trans-status" style="font-size:12px;margin-bottom:12px;display:none"></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px" id="trans-stats" style="display:none">
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--orange)" id="trans-skus">0</div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-top:2px">SKUs</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--blue)" id="trans-locais">0</div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-top:2px">Locais</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--green)" id="trans-eans">0</div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-top:2px">EANs</div>
+        </div>
+      </div>
+      <div style="background:var(--bg2);border:1px dashed var(--border2);border-radius:var(--radius-lg);padding:20px;text-align:center;margin-bottom:14px">
+        <i class="ti ti-file-spreadsheet" style="font-size:36px;color:var(--purple);opacity:.5;display:block;margin-bottom:10px"></i>
+        <p style="font-size:13px;color:var(--text3);margin-bottom:14px;line-height:1.5">
+          Importe a planilha <strong>390_baixo.xlsx</strong> (ou similar).<br>
+          Colunas: <strong>Item, Descrição, EAN, Descrição_2, Descrição_1, Quantidade, Disponível</strong>
+        </p>
+        <label class="btn btn-orange" for="trans-xlsx-input" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+          <i class="ti ti-upload"></i> Importar planilha de locais baixos
+        </label>
+      </div>
+      <a href="/transitorio" target="_blank" class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:6px">
+        <i class="ti ti-device-mobile"></i> Ver tela do operador
+      </a>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="trans-xlsx-input" accept=".xlsx,.xls" style="display:none">
 
 <!-- MODAL ITEM -->
 <div class="modal-overlay" id="modal-item">
@@ -436,6 +480,11 @@ function adaptarUI() {
     const verExp = isAdmCentral() || papelAtual === 'adm_expedicao';
     tabExp.style.display = verExp ? 'block' : 'none';
   }
+  const tabTrans = document.getElementById('tab-transitorio');
+  if (tabTrans) {
+    const verTrans = isAdmCentral() || papelAtual === 'adm_armazenagem';
+    tabTrans.style.display = verTrans ? 'block' : 'none';
+  }
   // Link "Ver coletor" — ajustado também ao trocar de aba
   atualizarLinkColetor('listas');
 }
@@ -484,12 +533,14 @@ async function checarSessao() {
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key==='Enter') fazerLogin(); });
 
 function switchView(view) {
-  document.querySelectorAll('.top-tab').forEach((b,i)=>b.classList.toggle('active', ['listas','usuarios','expedicao'][i]===view));
+  document.querySelectorAll('.top-tab').forEach((b,i)=>b.classList.toggle('active', ['listas','usuarios','expedicao','transitorio'][i]===view));
   document.getElementById('view-listas').classList.toggle('active', view==='listas');
   document.getElementById('view-usuarios').classList.toggle('active', view==='usuarios');
   document.getElementById('view-expedicao').classList.toggle('active', view==='expedicao');
+  document.getElementById('view-transitorio').classList.toggle('active', view==='transitorio');
   if (view === 'usuarios') carregarUsuarios();
   if (view === 'expedicao') carregarPedidosExpedicao();
+  if (view === 'transitorio') carregarTransitorio();
   atualizarLinkColetor(view);
 }
 
@@ -498,6 +549,7 @@ function atualizarLinkColetor(viewAtiva) {
   if (!btnColetor) return;
   // Se estiver na aba Expedição, sempre aponta pro coletor de expedição
   if (viewAtiva === 'expedicao') { btnColetor.href = '/expedicao-coletor'; return; }
+  if (viewAtiva === 'transitorio') { btnColetor.href = '/transitorio'; return; }
   // Senão, usa o setor do ADM logado (ou armazenagem por padrão pra central)
   const mapaSetor = {
     adm_armazenagem: '/coletor',
@@ -622,7 +674,66 @@ async function flagarTransportadora(flagado) {
   carregarPedidosExpedicao();
 }
 
-async function excluirPedidos() {
+async function carregarTransitorio() {
+  try {
+    const r = await fetch('/api/transitorio/locais', { credentials:'include' });
+    const data = await r.json();
+    const statsEl = document.getElementById('trans-stats');
+    if (data.length) {
+      statsEl.style.display = 'grid';
+      document.getElementById('trans-skus').textContent = new Set(data.map(l=>l.sku)).size;
+      document.getElementById('trans-locais').textContent = data.length;
+      document.getElementById('trans-eans').textContent = new Set(data.map(l=>l.ean).filter(Boolean)).size;
+    } else {
+      statsEl.style.display = 'none';
+    }
+  } catch(e) { console.error(e); }
+}
+
+document.getElementById('trans-xlsx-input').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('trans-status');
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--text3)';
+  statusEl.textContent = 'Processando planilha...';
+
+  const reader = new FileReader();
+  reader.onload = async function(ev) {
+    try {
+      const wb = XLSX.read(ev.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, {defval:''});
+      const registros = data.map(r => ({
+        sku: String(r['Item'] ?? '').trim(),
+        descricao: String(r['Descrição'] ?? r['Descricao'] ?? '').trim(),
+        ean: String(r['EAN'] ?? r['Ean'] ?? '').trim(),
+        local: String(r['Descrição_2'] ?? r['Local'] ?? '').trim(),
+        tipo_local: String(r['Descrição_1'] ?? '').trim(),
+        qtd: Number(r['Quantidade'] ?? 0),
+        disponivel: Number(r['Disponível'] ?? r['Disponivel'] ?? r['Quantidade'] ?? 0),
+      })).filter(r => r.sku && r.local);
+
+      const resp = await fetch('/api/transitorio/importar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({ registros })
+      });
+      const result = await resp.json();
+      if (result.erro) { statusEl.style.color='var(--red)'; statusEl.textContent='Erro: '+result.erro; return; }
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = `✅ ${registros.length} locais importados (${new Set(registros.map(r=>r.sku)).size} SKUs)`;
+      toast('✅ Planilha de locais baixos importada!');
+      carregarTransitorio();
+    } catch(err) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = 'Erro ao ler planilha: ' + err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+});
   if (!confirm('Excluir TODOS os pedidos de expedição? Esta ação não pode ser desfeita.')) return;
   await api('/api/expedicao/pedidos', { method:'DELETE' });
   toast('Pedidos excluídos');

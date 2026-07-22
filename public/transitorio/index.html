@@ -140,11 +140,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 
   <div class="tabs">
-    <div class="tab active" id="tab-scan" onclick="setTab('scan')">
+    <div class="tab active" id="tab-scan">
       <i class="ti ti-scan"></i> Compactador
-    </div>
-    <div class="tab" id="tab-import" onclick="setTab('import')">
-      <i class="ti ti-upload"></i> Importar Planilha
     </div>
   </div>
 
@@ -159,30 +156,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div id="resultado"></div>
   </div>
-
-  <!-- ABA: IMPORTAR -->
-  <div id="aba-import" style="display:none" class="import-area">
-    <div class="stats-import" id="stats-import" style="display:none">
-      <div class="stat-card"><div class="sv" id="st-skus" style="color:var(--orange)">0</div><div class="sl">SKUs</div></div>
-      <div class="stat-card"><div class="sv" id="st-locais" style="color:var(--blue)">0</div><div class="sl">Locais</div></div>
-      <div class="stat-card"><div class="sv" id="st-eans" style="color:var(--green)">0</div><div class="sl">EANs</div></div>
-    </div>
-    <div class="import-card">
-      <i class="ti ti-file-spreadsheet"></i>
-      <p>Importe a planilha de <strong>locais baixos</strong> (390_baixo.xlsx ou similar).<br>
-      Colunas usadas: <strong>Item, Descrição, EAN, Descrição_2, Descrição_1, Quantidade, Disponível</strong></p>
-      <label class="import-btn-label" for="xlsx-input">
-        <i class="ti ti-upload"></i> Selecionar planilha
-      </label>
-      <input type="file" id="xlsx-input" accept=".xlsx,.xls" style="display:none">
-    </div>
-    <div id="import-status" style="font-size:12px;margin-top:8px;text-align:center;display:none"></div>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 let username = null;
 let locaisBaixos = []; // {sku, descricao, ean, local, tipo_local, qtd, disponivel}
@@ -233,30 +210,12 @@ document.getElementById('btn-entrar').addEventListener('click', fazerLogin);
 document.getElementById('login-user').addEventListener('keydown', e => { if (e.key==='Enter') fazerLogin(); });
 
 // ── ABAS ─────────────────────────────────────────────────────
-function setTab(tab) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-' + tab).classList.add('active');
-  document.getElementById('aba-scan').style.display = tab === 'scan' ? 'block' : 'none';
-  document.getElementById('aba-import').style.display = tab === 'import' ? 'block' : 'none';
-  if (tab === 'scan') setTimeout(() => document.getElementById('ean-input').focus(), 100);
-}
-
 // ── LOCAIS DO SERVIDOR ────────────────────────────────────────
 async function carregarLocais() {
   try {
     const r = await fetch('/api/transitorio/locais');
-    const data = await r.json();
-    locaisBaixos = data;
-    atualizarStats();
+    locaisBaixos = await r.json();
   } catch(e) { console.error(e); }
-}
-
-function atualizarStats() {
-  if (!locaisBaixos.length) { document.getElementById('stats-import').style.display = 'none'; return; }
-  document.getElementById('stats-import').style.display = 'grid';
-  document.getElementById('st-skus').textContent = new Set(locaisBaixos.map(l => l.sku)).size;
-  document.getElementById('st-locais').textContent = locaisBaixos.length;
-  document.getElementById('st-eans').textContent = new Set(locaisBaixos.map(l => l.ean).filter(Boolean)).size;
 }
 
 // ── BUSCA POR EAN ─────────────────────────────────────────────
@@ -315,60 +274,6 @@ function buscarEAN() {
 
 document.getElementById('ean-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') buscarEAN();
-});
-
-// ── IMPORTAR PLANILHA ─────────────────────────────────────────
-document.getElementById('xlsx-input').addEventListener('change', async function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const statusEl = document.getElementById('import-status');
-  statusEl.style.display = 'block';
-  statusEl.style.color = 'var(--text3)';
-  statusEl.textContent = 'Processando planilha...';
-
-  const reader = new FileReader();
-  reader.onload = async function(ev) {
-    try {
-      const wb = XLSX.read(ev.target.result, {type:'array'});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, {defval:''});
-
-      const registros = data.map(r => ({
-        sku: String(r['Item'] ?? r['item'] ?? '').trim(),
-        descricao: String(r['Descrição'] ?? r['Descricao'] ?? '').trim(),
-        ean: String(r['EAN'] ?? r['Ean'] ?? r['ean'] ?? '').trim(),
-        local: String(r['Descrição_2'] ?? r['Local'] ?? '').trim(),
-        tipo_local: String(r['Descrição_1'] ?? r['Tipo'] ?? '').trim(),
-        qtd: Number(r['Quantidade'] ?? 0),
-        disponivel: Number(r['Disponível'] ?? r['Disponivel'] ?? r['Quantidade'] ?? 0),
-      })).filter(r => r.sku && r.local);
-
-      // Enviar para o servidor
-      const resp = await fetch('/api/transitorio/importar', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ registros })
-      });
-      const result = await resp.json();
-
-      if (result.erro) {
-        statusEl.style.color = 'var(--red)';
-        statusEl.textContent = 'Erro: ' + result.erro;
-        return;
-      }
-
-      locaisBaixos = registros;
-      atualizarStats();
-      statusEl.style.color = 'var(--green)';
-      statusEl.textContent = `✅ ${registros.length} locais importados (${new Set(registros.map(r=>r.sku)).size} SKUs)`;
-      toast('✅ Planilha importada com sucesso!');
-    } catch(err) {
-      statusEl.style.color = 'var(--red)';
-      statusEl.textContent = 'Erro ao ler planilha: ' + err.message;
-    }
-  };
-  reader.readAsArrayBuffer(file);
-  e.target.value = '';
 });
 
 verificarAcesso();
