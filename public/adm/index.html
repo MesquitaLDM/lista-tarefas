@@ -734,6 +734,8 @@ document.getElementById('trans-xlsx-input').addEventListener('change', async fun
   reader.readAsArrayBuffer(file);
   e.target.value = '';
 });
+
+async function excluirPedidos() {
   if (!confirm('Excluir TODOS os pedidos de expedição? Esta ação não pode ser desfeita.')) return;
   await api('/api/expedicao/pedidos', { method:'DELETE' });
   toast('Pedidos excluídos');
