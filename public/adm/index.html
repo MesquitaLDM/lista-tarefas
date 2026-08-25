@@ -719,6 +719,7 @@ document.getElementById('trans-vazios-input').addEventListener('change', async f
       const ws = wb.Sheets[wb.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(ws, {defval:''});
       const registros = data.map(r => ({
+        id_local: String(r['Id Local'] ?? r['Id_Local'] ?? '').trim(),
         corredor: String(r['X1'] ?? '').trim(),
         rua: String(r['X2'] ?? '').trim(),
         coluna: String(r['X3'] ?? '').trim(),

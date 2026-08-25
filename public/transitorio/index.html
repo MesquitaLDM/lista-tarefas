@@ -243,13 +243,14 @@ function buscarEAN() {
           <i class="ti ti-alert-triangle" style="color:var(--amber);font-size:20px"></i>
           <strong style="color:var(--amber)">Item sem local de picking cadastrado</strong>
         </div>
-        <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Bipe ou digite o endereço onde você está para encontrar locais vazios próximos.</p>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Bipe a etiqueta do endereço onde você está para encontrar locais vazios próximos.</p>
         <div style="display:flex;gap:8px">
-          <input class="scan-input" id="endereco-input" placeholder="Ex: MZB 006 004 14" 
-            style="flex:1;font-size:14px" autocomplete="off"
+          <input class="scan-input" id="endereco-input" placeholder="Bipe a etiqueta do local..." 
+            style="flex:1;font-size:14px" autocomplete="off" inputmode="numeric"
             onkeydown="if(event.key==='Enter') buscarVazios()">
           <button class="scan-btn" onclick="buscarVazios()"><i class="ti ti-map-pin"></i></button>
         </div>
+        <p style="font-size:10px;color:var(--text3);margin-top:6px">O código bipado começa com 005000 seguido do ID do local.</p>
       </div>`;
     document.getElementById('ean-input').value = '';
     setTimeout(() => document.getElementById('endereco-input')?.focus(), 100);
@@ -285,47 +286,59 @@ function buscarEAN() {
 }
 
 async function buscarVazios() {
-  const endereco = document.getElementById('endereco-input')?.value.trim();
-  if (!endereco) return;
+  const codigo = document.getElementById('endereco-input')?.value.trim();
+  if (!codigo) return;
   const resultEl = document.getElementById('resultado');
 
   resultEl.innerHTML = `<div class="empty-state"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i><p>Buscando locais vazios próximos...</p></div>`;
 
   try {
-    const r = await fetch('/api/transitorio/vazios-proximos?endereco=' + encodeURIComponent(endereco));
-    const vazios = await r.json();
+    const r = await fetch('/api/transitorio/vazios-proximos?endereco=' + encodeURIComponent(codigo));
+    const data = await r.json();
+
+    if (data.erro) {
+      resultEl.innerHTML = `
+        <div class="not-found">
+          <i class="ti ti-map-off"></i>
+          <p>Local com ID <strong>${data.id_local}</strong> não encontrado na planilha de locais vazios.</p>
+        </div>`;
+      return;
+    }
+
+    const vazios = data.vazios || data;
+    const endRef = data.endereco_ref || codigo;
 
     if (!vazios.length) {
       resultEl.innerHTML = `
         <div class="not-found">
           <i class="ti ti-map-off"></i>
-          <p>Nenhum local vazio encontrado próximo de <strong>${endereco}</strong>.</p>
+          <p>Nenhum local vazio encontrado próximo de <strong>${endRef}</strong>.</p>
         </div>`;
       return;
     }
 
     const vaziosHtml = vazios.map((v, i) => `
-      <div class="local-item" style="${i===0?'background:var(--green-light);border-left:3px solid var(--green)':''}">
-        <span class="local-badge badge-mzn" style="${i===0?'background:var(--green-light);color:var(--green)':''}">${i===0?'★ Mais próximo':'Vazio'}</span>
+      <div class="local-item" style="${i===0?'background:var(--green-light);':''}">
+        <span class="local-badge badge-mzn" style="${i===0?'background:var(--green-light);color:var(--green)':''}">
+          ${i===0?'★ Mais próximo':`#${i+1}`}
+        </span>
         <div class="local-info">
           <div class="local-end" style="${i===0?'color:var(--green)':''}">${v.descricao||'—'}</div>
           <div class="local-tipo">${v.classe_local||''} ${v.grupo_classe||''}</div>
         </div>
-        <div style="flex-shrink:0">
-          <span style="font-size:10px;padding:2px 8px;border-radius:6px;background:var(--bg4);color:var(--text3)">VAZIO</span>
-        </div>
+        <span style="font-size:10px;padding:2px 8px;border-radius:6px;background:var(--bg4);color:var(--text3);flex-shrink:0">VAZIO</span>
       </div>`).join('');
 
     resultEl.innerHTML = `
       <div class="result-box">
         <div class="result-header">
-          <div class="result-sku" style="color:var(--amber)"><i class="ti ti-map-pin"></i> Referência: ${endereco}</div>
-          <div class="result-nome" style="font-size:12px;color:var(--text3)">${vazios.length} locais vazios próximos encontrados</div>
+          <div class="result-sku" style="color:var(--amber)"><i class="ti ti-map-pin"></i> Referência: ${endRef}</div>
+          <div class="result-nome" style="font-size:12px;color:var(--text3)">${vazios.length} locais vazios próximos</div>
         </div>
         <div class="locais-lista">${vaziosHtml}</div>
       </div>
       <div style="margin-top:10px;text-align:center">
-        <button onclick="document.getElementById('resultado').innerHTML='';document.getElementById('ean-input').focus()" 
+        <button onclick="document.getElementById('resultado').innerHTML='';document.getElementById('ean-input').value='';document.getElementById('ean-input').focus()" 
           style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
           <i class="ti ti-arrow-left"></i> Nova busca
         </button>

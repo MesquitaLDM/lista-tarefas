@@ -530,6 +530,7 @@ app.post('/api/locais-altos/importar', autenticarAdm, upload.single('file'), asy
 pool.query(`
   CREATE TABLE IF NOT EXISTS transitorio_locais_vazios (
     id TEXT PRIMARY KEY,
+    id_local TEXT,
     corredor TEXT,
     rua TEXT,
     coluna TEXT,
@@ -552,18 +553,19 @@ app.post('/api/transitorio/importar-vazios', async (req, res) => {
     try {
       await client.query('BEGIN');
       await client.query('DELETE FROM transitorio_locais_vazios');
+      await client.query('ALTER TABLE transitorio_locais_vazios ADD COLUMN IF NOT EXISTS id_local TEXT;');
       const LOTE = 200;
       for (let i = 0; i < registros.length; i += LOTE) {
         const lote = registros.slice(i, i + LOTE);
         const vals = lote.map((_, j) =>
-          `($${j*8+1},$${j*8+2},$${j*8+3},$${j*8+4},$${j*8+5},$${j*8+6},$${j*8+7},$${j*8+8})`
+          `($${j*9+1},$${j*9+2},$${j*9+3},$${j*9+4},$${j*9+5},$${j*9+6},$${j*9+7},$${j*9+8},$${j*9+9})`
         ).join(',');
         const params = lote.flatMap(r => [
-          uuidv4(), r.corredor, r.rua, r.coluna, r.nivel,
+          uuidv4(), r.id_local, r.corredor, r.rua, r.coluna, r.nivel,
           r.descricao, r.grupo_classe, r.classe_local
         ]);
         await client.query(
-          `INSERT INTO transitorio_locais_vazios (id,corredor,rua,coluna,nivel,descricao,grupo_classe,classe_local) VALUES ${vals}`,
+          `INSERT INTO transitorio_locais_vazios (id,id_local,corredor,rua,coluna,nivel,descricao,grupo_classe,classe_local) VALUES ${vals}`,
           params
         );
       }
@@ -575,40 +577,45 @@ app.post('/api/transitorio/importar-vazios', async (req, res) => {
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// Buscar locais vazios próximos de um endereço
+// Buscar locais vazios próximos — aceita código bipado (005000 + id_local) ou endereço texto
 app.get('/api/transitorio/vazios-proximos', async (req, res) => {
   try {
     const { endereco } = req.query;
     if (!endereco) return res.json([]);
 
-    const { rows } = await pool.query(
-      'SELECT * FROM transitorio_locais_vazios ORDER BY descricao'
-    );
-
+    const { rows } = await pool.query('SELECT * FROM transitorio_locais_vazios ORDER BY descricao');
     if (!rows.length) return res.json([]);
 
+    // Verificar se é um código bipado (começa com 005000)
+    let refDescricao = endereco.trim();
+    const PREFIXO = '005000';
+    if (refDescricao.startsWith(PREFIXO)) {
+      const idLocal = refDescricao.slice(PREFIXO.length);
+      const localRef = rows.find(r => r.id_local === idLocal);
+      if (localRef) {
+        refDescricao = localRef.descricao;
+      } else {
+        // ID não encontrado nos vazios — tentar buscar nos locais de picking
+        const { rows: picking } = await pool.query(
+          'SELECT * FROM transitorio_locais_vazios WHERE id_local=$1', [idLocal]
+        );
+        if (picking.length) refDescricao = picking[0].descricao;
+        else return res.json({ erro: 'Local não encontrado', id_local: idLocal });
+      }
+    }
+
     // Calcular proximidade baseado na Descrição
-    // Formato: XXX NNN NNN NN (corredor, rua, coluna, nivel)
-    const partes = endereco.trim().split(/\s+/);
+    const partes = refDescricao.trim().split(/\s+/);
     const [refCorredor, refRua, refColuna, refNivel] = partes;
 
     function calcProximidade(local) {
-      const lp = local.descricao.trim().split(/\s+/);
+      const lp = (local.descricao||'').trim().split(/\s+/);
       const [lCorredor, lRua, lColuna, lNivel] = lp;
-
       let score = 0;
-      // Mesmo corredor = prioridade máxima
       if (lCorredor === refCorredor) score += 1000;
-      // Diferença de rua (menor = mais próximo)
-      const diffRua = Math.abs(parseInt(lRua||0) - parseInt(refRua||0));
-      score -= diffRua * 10;
-      // Diferença de coluna
-      const diffCol = Math.abs(parseInt(lColuna||0) - parseInt(refColuna||0));
-      score -= diffCol * 2;
-      // Diferença de nível
-      const diffNiv = Math.abs(parseInt(lNivel||0) - parseInt(refNivel||0));
-      score -= diffNiv;
-
+      score -= Math.abs(parseInt(lRua||0) - parseInt(refRua||0)) * 10;
+      score -= Math.abs(parseInt(lColuna||0) - parseInt(refColuna||0)) * 2;
+      score -= Math.abs(parseInt(lNivel||0) - parseInt(refNivel||0));
       return score;
     }
 
@@ -617,7 +624,7 @@ app.get('/api/transitorio/vazios-proximos', async (req, res) => {
       .sort((a, b) => b.score - a.score)
       .slice(0, 10);
 
-    res.json(ordenados);
+    res.json({ vazios: ordenados, endereco_ref: refDescricao });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
