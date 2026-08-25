@@ -590,17 +590,20 @@ app.get('/api/transitorio/vazios-proximos', async (req, res) => {
     let refDescricao = endereco.trim();
     const PREFIXO = '005000';
     if (refDescricao.startsWith(PREFIXO)) {
-      const idLocal = refDescricao.slice(PREFIXO.length);
-      const localRef = rows.find(r => r.id_local === idLocal);
+      const idLocal = refDescricao.slice(PREFIXO.length).replace(/^0+/, '');
+      const idLocalOriginal = refDescricao.slice(PREFIXO.length);
+      console.log(`[VAZIOS] Buscando id_local="${idLocal}" (original="${idLocalOriginal}") em ${rows.length} locais`);
+      if (rows.length > 0) console.log(`[VAZIOS] Exemplo id_local no banco: "${rows[0].id_local}" (tipo: ${typeof rows[0].id_local})`);
+      const localRef = rows.find(r =>
+        String(r.id_local).trim() === idLocal ||
+        String(r.id_local).trim() === idLocalOriginal
+      );
       if (localRef) {
         refDescricao = localRef.descricao;
+        console.log(`[VAZIOS] Encontrado! descricao="${refDescricao}"`);
       } else {
-        // ID não encontrado nos vazios — tentar buscar nos locais de picking
-        const { rows: picking } = await pool.query(
-          'SELECT * FROM transitorio_locais_vazios WHERE id_local=$1', [idLocal]
-        );
-        if (picking.length) refDescricao = picking[0].descricao;
-        else return res.json({ erro: 'Local não encontrado', id_local: idLocal });
+        console.log(`[VAZIOS] Não encontrado para id_local="${idLocal}"`);
+        return res.json({ erro: 'Local não encontrado', id_local: idLocal });
       }
     }
 

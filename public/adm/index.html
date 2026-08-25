@@ -719,7 +719,7 @@ document.getElementById('trans-vazios-input').addEventListener('change', async f
       const ws = wb.Sheets[wb.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(ws, {defval:''});
       const registros = data.map(r => ({
-        id_local: String(r['Id Local'] ?? r['Id_Local'] ?? '').trim(),
+        id_local: String(r['Id Local'] ?? r['Id_Local'] ?? r['ID Local'] ?? r['id_local'] ?? r['Id local'] ?? '').trim(),
         corredor: String(r['X1'] ?? '').trim(),
         rua: String(r['X2'] ?? '').trim(),
         coluna: String(r['X3'] ?? '').trim(),
@@ -728,6 +728,10 @@ document.getElementById('trans-vazios-input').addEventListener('change', async f
         grupo_classe: String(r['Grupo Classe'] ?? '').trim(),
         classe_local: String(r['Classe Local'] ?? '').trim(),
       })).filter(r => r.descricao);
+      
+      // Debug: mostrar primeiros registros para verificar id_local
+      console.log('[VAZIOS] Primeiros registros:', registros.slice(0,3).map(r => ({id_local: r.id_local, descricao: r.descricao})));
+      console.log('[VAZIOS] Chaves da planilha:', Object.keys(data[0] || {}));
 
       const resp = await fetch('/api/transitorio/importar-vazios', {
         method: 'POST',

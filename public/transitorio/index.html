@@ -297,10 +297,12 @@ async function buscarVazios() {
     const data = await r.json();
 
     if (data.erro) {
+      const idMostrar = data.id_local || codigo;
       resultEl.innerHTML = `
         <div class="not-found">
           <i class="ti ti-map-off"></i>
-          <p>Local com ID <strong>${data.id_local}</strong> não encontrado na planilha de locais vazios.</p>
+          <p>Local com ID <strong>${idMostrar}</strong> não encontrado.</p>
+          <p style="font-size:11px;color:var(--text3);margin-top:8px">Verifique se a planilha de locais vazios foi importada no ADM com os dados mais recentes.</p>
         </div>`;
       return;
     }
