@@ -525,7 +525,109 @@ app.post('/api/locais-altos/importar', autenticarAdm, upload.single('file'), asy
   }
 });
 
-// ── TRANSITÓRIOS — COMPACTADOR ───────────────────────────────
+// ── TRANSITÓRIOS — LOCAIS VAZIOS ─────────────────────────────
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS transitorio_locais_vazios (
+    id TEXT PRIMARY KEY,
+    corredor TEXT,
+    rua TEXT,
+    coluna TEXT,
+    nivel TEXT,
+    descricao TEXT,
+    grupo_classe TEXT,
+    classe_local TEXT,
+    importado_em TIMESTAMPTZ DEFAULT now()
+  );
+`).catch(console.error);
+
+// Importar locais vazios (ADM)
+app.post('/api/transitorio/importar-vazios', async (req, res) => {
+  try {
+    const { registros } = req.body;
+    if (!Array.isArray(registros) || !registros.length)
+      return res.status(400).json({ erro: 'Nenhum registro' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM transitorio_locais_vazios');
+      const LOTE = 200;
+      for (let i = 0; i < registros.length; i += LOTE) {
+        const lote = registros.slice(i, i + LOTE);
+        const vals = lote.map((_, j) =>
+          `($${j*8+1},$${j*8+2},$${j*8+3},$${j*8+4},$${j*8+5},$${j*8+6},$${j*8+7},$${j*8+8})`
+        ).join(',');
+        const params = lote.flatMap(r => [
+          uuidv4(), r.corredor, r.rua, r.coluna, r.nivel,
+          r.descricao, r.grupo_classe, r.classe_local
+        ]);
+        await client.query(
+          `INSERT INTO transitorio_locais_vazios (id,corredor,rua,coluna,nivel,descricao,grupo_classe,classe_local) VALUES ${vals}`,
+          params
+        );
+      }
+      await client.query('COMMIT');
+    } catch(e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
+
+    res.json({ ok: true, importados: registros.length });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Buscar locais vazios próximos de um endereço
+app.get('/api/transitorio/vazios-proximos', async (req, res) => {
+  try {
+    const { endereco } = req.query;
+    if (!endereco) return res.json([]);
+
+    const { rows } = await pool.query(
+      'SELECT * FROM transitorio_locais_vazios ORDER BY descricao'
+    );
+
+    if (!rows.length) return res.json([]);
+
+    // Calcular proximidade baseado na Descrição
+    // Formato: XXX NNN NNN NN (corredor, rua, coluna, nivel)
+    const partes = endereco.trim().split(/\s+/);
+    const [refCorredor, refRua, refColuna, refNivel] = partes;
+
+    function calcProximidade(local) {
+      const lp = local.descricao.trim().split(/\s+/);
+      const [lCorredor, lRua, lColuna, lNivel] = lp;
+
+      let score = 0;
+      // Mesmo corredor = prioridade máxima
+      if (lCorredor === refCorredor) score += 1000;
+      // Diferença de rua (menor = mais próximo)
+      const diffRua = Math.abs(parseInt(lRua||0) - parseInt(refRua||0));
+      score -= diffRua * 10;
+      // Diferença de coluna
+      const diffCol = Math.abs(parseInt(lColuna||0) - parseInt(refColuna||0));
+      score -= diffCol * 2;
+      // Diferença de nível
+      const diffNiv = Math.abs(parseInt(lNivel||0) - parseInt(refNivel||0));
+      score -= diffNiv;
+
+      return score;
+    }
+
+    const ordenados = rows
+      .map(r => ({ ...r, score: calcProximidade(r) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+
+    res.json(ordenados);
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Total de locais vazios
+app.get('/api/transitorio/vazios-total', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) as total FROM transitorio_locais_vazios');
+    res.json(rows[0]);
+  } catch(e) { res.json({ total: 0 }); }
+});
 
 // Criar tabela de locais baixos se não existir
 pool.query(`

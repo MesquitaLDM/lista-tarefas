@@ -92,6 +92,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .empty-state{padding:40px 20px;text-align:center;color:var(--text3)}
 .empty-state i{font-size:44px;display:block;margin-bottom:12px;opacity:.2;color:var(--orange)}
 .empty-state p{font-size:13px;line-height:1.6}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* IMPORTAR */
 .import-area{padding:16px;max-width:600px;margin:0 auto;width:100%}
@@ -219,32 +220,43 @@ async function carregarLocais() {
 }
 
 // ── BUSCA POR EAN ─────────────────────────────────────────────
+function badgeClass(tipo) {
+  if (!tipo) return 'badge-outro';
+  const t = tipo.toUpperCase();
+  if (t.includes('PPP') || t.includes('PORTA PALLET')) return 'badge-ppp';
+  if (t.includes('MZN') || t.includes('MEZANINO') || t.includes('MZ')) return 'badge-mzn';
+  if (t.includes('MZP')) return 'badge-mzp';
+  return 'badge-outro';
+}
+
 function buscarEAN() {
   const ean = document.getElementById('ean-input').value.trim();
   if (!ean) return;
   const resultEl = document.getElementById('resultado');
-
   const encontrados = locaisBaixos.filter(l => l.ean && l.ean === ean);
 
   if (!encontrados.length) {
+    // Produto não tem local de picking — mostrar opção de bipar endereço atual
     resultEl.innerHTML = `
-      <div class="not-found">
-        <i class="ti ti-barcode-off"></i>
-        <p>EAN <strong>${ean}</strong> não encontrado na planilha de locais baixos.</p>
+      <div class="not-found" style="background:var(--amber-light);border:1px solid var(--amber);border-radius:var(--radius-lg);padding:16px;text-align:left">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <i class="ti ti-alert-triangle" style="color:var(--amber);font-size:20px"></i>
+          <strong style="color:var(--amber)">Item sem local de picking cadastrado</strong>
+        </div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Bipe ou digite o endereço onde você está para encontrar locais vazios próximos.</p>
+        <div style="display:flex;gap:8px">
+          <input class="scan-input" id="endereco-input" placeholder="Ex: MZB 006 004 14" 
+            style="flex:1;font-size:14px" autocomplete="off"
+            onkeydown="if(event.key==='Enter') buscarVazios()">
+          <button class="scan-btn" onclick="buscarVazios()"><i class="ti ti-map-pin"></i></button>
+        </div>
       </div>`;
+    document.getElementById('ean-input').value = '';
+    setTimeout(() => document.getElementById('endereco-input')?.focus(), 100);
     return;
   }
 
   const primeiro = encontrados[0];
-  function badgeClass(tipo) {
-    if (!tipo) return 'badge-outro';
-    const t = tipo.toUpperCase();
-    if (t.includes('PPP') || t.includes('PORTA PALLET')) return 'badge-ppp';
-    if (t.includes('MZN') || t.includes('MEZANINO')) return 'badge-mzn';
-    if (t.includes('MZP')) return 'badge-mzp';
-    return 'badge-outro';
-  }
-
   const locaisHtml = encontrados.map(l => `
     <div class="local-item">
       <span class="local-badge ${badgeClass(l.tipo_local)}">${(l.tipo_local||'—').split(' ').slice(0,2).join(' ')}</span>
@@ -270,6 +282,57 @@ function buscarEAN() {
 
   document.getElementById('ean-input').value = '';
   document.getElementById('ean-input').focus();
+}
+
+async function buscarVazios() {
+  const endereco = document.getElementById('endereco-input')?.value.trim();
+  if (!endereco) return;
+  const resultEl = document.getElementById('resultado');
+
+  resultEl.innerHTML = `<div class="empty-state"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i><p>Buscando locais vazios próximos...</p></div>`;
+
+  try {
+    const r = await fetch('/api/transitorio/vazios-proximos?endereco=' + encodeURIComponent(endereco));
+    const vazios = await r.json();
+
+    if (!vazios.length) {
+      resultEl.innerHTML = `
+        <div class="not-found">
+          <i class="ti ti-map-off"></i>
+          <p>Nenhum local vazio encontrado próximo de <strong>${endereco}</strong>.</p>
+        </div>`;
+      return;
+    }
+
+    const vaziosHtml = vazios.map((v, i) => `
+      <div class="local-item" style="${i===0?'background:var(--green-light);border-left:3px solid var(--green)':''}">
+        <span class="local-badge badge-mzn" style="${i===0?'background:var(--green-light);color:var(--green)':''}">${i===0?'★ Mais próximo':'Vazio'}</span>
+        <div class="local-info">
+          <div class="local-end" style="${i===0?'color:var(--green)':''}">${v.descricao||'—'}</div>
+          <div class="local-tipo">${v.classe_local||''} ${v.grupo_classe||''}</div>
+        </div>
+        <div style="flex-shrink:0">
+          <span style="font-size:10px;padding:2px 8px;border-radius:6px;background:var(--bg4);color:var(--text3)">VAZIO</span>
+        </div>
+      </div>`).join('');
+
+    resultEl.innerHTML = `
+      <div class="result-box">
+        <div class="result-header">
+          <div class="result-sku" style="color:var(--amber)"><i class="ti ti-map-pin"></i> Referência: ${endereco}</div>
+          <div class="result-nome" style="font-size:12px;color:var(--text3)">${vazios.length} locais vazios próximos encontrados</div>
+        </div>
+        <div class="locais-lista">${vaziosHtml}</div>
+      </div>
+      <div style="margin-top:10px;text-align:center">
+        <button onclick="document.getElementById('resultado').innerHTML='';document.getElementById('ean-input').focus()" 
+          style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+          <i class="ti ti-arrow-left"></i> Nova busca
+        </button>
+      </div>`;
+  } catch(e) {
+    resultEl.innerHTML = `<div class="not-found"><i class="ti ti-alert-circle"></i><p>Erro ao buscar locais vazios.</p></div>`;
+  }
 }
 
 document.getElementById('ean-input').addEventListener('keydown', e => {

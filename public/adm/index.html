@@ -317,14 +317,25 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
           <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-top:2px">EANs</div>
         </div>
       </div>
-      <div style="background:var(--bg2);border:1px dashed var(--border2);border-radius:var(--radius-lg);padding:20px;text-align:center;margin-bottom:14px">
+      <div style="background:var(--bg2);border:1px dashed var(--border2);border-radius:var(--radius-lg);padding:20px;text-align:center;margin-bottom:10px">
         <i class="ti ti-file-spreadsheet" style="font-size:36px;color:var(--purple);opacity:.5;display:block;margin-bottom:10px"></i>
         <p style="font-size:13px;color:var(--text3);margin-bottom:14px;line-height:1.5">
-          Importe a planilha <strong>390_baixo.xlsx</strong> (ou similar).<br>
+          Importe a planilha <strong>390_baixo.xlsx</strong> (locais de picking baixo).<br>
           Colunas: <strong>Item, Descrição, EAN, Descrição_2, Descrição_1, Quantidade, Disponível</strong>
         </p>
         <label class="btn btn-orange" for="trans-xlsx-input" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-          <i class="ti ti-upload"></i> Importar planilha de locais baixos
+          <i class="ti ti-upload"></i> Importar locais de picking baixo
+        </label>
+      </div>
+      <div style="background:var(--bg2);border:1px dashed var(--border2);border-radius:var(--radius-lg);padding:20px;text-align:center;margin-bottom:14px">
+        <i class="ti ti-map-pin" style="font-size:36px;color:var(--green);opacity:.5;display:block;margin-bottom:10px"></i>
+        <p style="font-size:13px;color:var(--text3);margin-bottom:14px;line-height:1.5">
+          Importe a planilha de <strong>locais vazios</strong> (Locais_vazios_mzn_autom.xlsx).<br>
+          Colunas: <strong>X1, X2, X3, X4, Descrição, Grupo Classe, Classe Local</strong>
+        </p>
+        <div style="font-size:12px;color:var(--green);margin-bottom:10px" id="trans-vazios-count"></div>
+        <label class="btn btn-ghost" for="trans-vazios-input" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-color:var(--green);color:var(--green)">
+          <i class="ti ti-upload"></i> Importar locais vazios
         </label>
       </div>
       <a href="/transitorio" target="_blank" class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:6px">
@@ -335,6 +346,7 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
 </div>
 
 <input type="file" id="trans-xlsx-input" accept=".xlsx,.xls" style="display:none">
+<input type="file" id="trans-vazios-input" accept=".xlsx,.xls" style="display:none">
 
 <!-- MODAL ITEM -->
 <div class="modal-overlay" id="modal-item">
@@ -687,8 +699,50 @@ async function carregarTransitorio() {
     } else {
       statsEl.style.display = 'none';
     }
+    // Carregar total de locais vazios
+    const rv = await fetch('/api/transitorio/vazios-total', { credentials:'include' });
+    const vdata = await rv.json();
+    const vzEl = document.getElementById('trans-vazios-count');
+    if (vzEl && parseInt(vdata.total) > 0) {
+      vzEl.textContent = `✅ ${vdata.total} locais vazios importados`;
+    }
   } catch(e) { console.error(e); }
 }
+
+document.getElementById('trans-vazios-input').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(ev) {
+    try {
+      const wb = XLSX.read(ev.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, {defval:''});
+      const registros = data.map(r => ({
+        corredor: String(r['X1'] ?? '').trim(),
+        rua: String(r['X2'] ?? '').trim(),
+        coluna: String(r['X3'] ?? '').trim(),
+        nivel: String(r['X4'] ?? '').trim(),
+        descricao: String(r['Descrição'] ?? r['Descricao'] ?? '').trim(),
+        grupo_classe: String(r['Grupo Classe'] ?? '').trim(),
+        classe_local: String(r['Classe Local'] ?? '').trim(),
+      })).filter(r => r.descricao);
+
+      const resp = await fetch('/api/transitorio/importar-vazios', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({ registros })
+      });
+      const result = await resp.json();
+      if (result.erro) { toast('Erro: ' + result.erro); return; }
+      toast(`✅ ${registros.length} locais vazios importados!`);
+      carregarTransitorio();
+    } catch(err) { toast('Erro ao ler planilha: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+});
 
 document.getElementById('trans-xlsx-input').addEventListener('change', async function(e) {
   const file = e.target.files[0];
