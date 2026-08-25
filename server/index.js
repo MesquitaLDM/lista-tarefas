@@ -592,17 +592,32 @@ app.get('/api/transitorio/vazios-proximos', async (req, res) => {
     if (refDescricao.startsWith(PREFIXO)) {
       const idLocal = refDescricao.slice(PREFIXO.length).replace(/^0+/, '');
       const idLocalOriginal = refDescricao.slice(PREFIXO.length);
-      console.log(`[VAZIOS] Buscando id_local="${idLocal}" (original="${idLocalOriginal}") em ${rows.length} locais`);
-      if (rows.length > 0) console.log(`[VAZIOS] Exemplo id_local no banco: "${rows[0].id_local}" (tipo: ${typeof rows[0].id_local})`);
-      const localRef = rows.find(r =>
+      console.log(`[VAZIOS] Buscando id_local="${idLocal}" em ${rows.length} locais vazios`);
+
+      // Buscar primeiro nos locais vazios
+      let localRef = rows.find(r =>
         String(r.id_local).trim() === idLocal ||
         String(r.id_local).trim() === idLocalOriginal
       );
-      if (localRef) {
-        refDescricao = localRef.descricao;
-        console.log(`[VAZIOS] Encontrado! descricao="${refDescricao}"`);
+
+      // Se não encontrou nos vazios, buscar nos locais de picking baixo
+      if (!localRef) {
+        const { rows: picking } = await pool.query(
+          `SELECT id_local, local FROM transitorio_locais WHERE id_local=$1 OR id_local=$2 LIMIT 1`,
+          [idLocal, idLocalOriginal]
+        );
+        if (picking.length) {
+          refDescricao = picking[0].local;
+          localRef = picking[0];
+          console.log(`[VAZIOS] Encontrado nos locais de picking: "${refDescricao}"`);
+        }
       } else {
-        console.log(`[VAZIOS] Não encontrado para id_local="${idLocal}"`);
+        refDescricao = localRef.descricao;
+        console.log(`[VAZIOS] Encontrado nos locais vazios: "${refDescricao}"`);
+      }
+
+      if (!localRef) {
+        console.log(`[VAZIOS] ID ${idLocal} não encontrado em nenhuma tabela`);
         return res.json({ erro: 'Local não encontrado', id_local: idLocal });
       }
     }
@@ -643,6 +658,7 @@ app.get('/api/transitorio/vazios-total', async (req, res) => {
 pool.query(`
   CREATE TABLE IF NOT EXISTS transitorio_locais (
     id TEXT PRIMARY KEY,
+    id_local TEXT,
     sku TEXT,
     descricao TEXT,
     ean TEXT,
@@ -653,6 +669,7 @@ pool.query(`
     importado_em TIMESTAMPTZ DEFAULT now()
   );
 `).catch(console.error);
+pool.query(`ALTER TABLE transitorio_locais ADD COLUMN IF NOT EXISTS id_local TEXT;`).catch(console.error);
 
 // Importar planilha de locais baixos (qualquer usuário autenticado)
 app.post('/api/transitorio/importar', async (req, res) => {
@@ -669,14 +686,14 @@ app.post('/api/transitorio/importar', async (req, res) => {
       for (let i = 0; i < registros.length; i += LOTE) {
         const lote = registros.slice(i, i + LOTE);
         const vals = lote.map((_, j) =>
-          `($${j*8+1},$${j*8+2},$${j*8+3},$${j*8+4},$${j*8+5},$${j*8+6},$${j*8+7},$${j*8+8})`
+          `($${j*9+1},$${j*9+2},$${j*9+3},$${j*9+4},$${j*9+5},$${j*9+6},$${j*9+7},$${j*9+8},$${j*9+9})`
         ).join(',');
         const params = lote.flatMap(r => [
-          uuidv4(), r.sku, r.descricao, r.ean, r.local, r.tipo_local,
+          uuidv4(), r.id_local, r.sku, r.descricao, r.ean, r.local, r.tipo_local,
           r.qtd || 0, r.disponivel || 0
         ]);
         await client.query(
-          `INSERT INTO transitorio_locais (id,sku,descricao,ean,local,tipo_local,qtd,disponivel) VALUES ${vals}`,
+          `INSERT INTO transitorio_locais (id,id_local,sku,descricao,ean,local,tipo_local,qtd,disponivel) VALUES ${vals}`,
           params
         );
       }

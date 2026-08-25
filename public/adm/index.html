@@ -764,6 +764,7 @@ document.getElementById('trans-xlsx-input').addEventListener('change', async fun
       const ws = wb.Sheets[wb.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(ws, {defval:''});
       const registros = data.map(r => ({
+        id_local: String(r['Local'] ?? '').trim(),
         sku: String(r['Item'] ?? '').trim(),
         descricao: String(r['Descrição'] ?? r['Descricao'] ?? '').trim(),
         ean: String(r['EAN'] ?? r['Ean'] ?? '').trim(),
