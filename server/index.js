@@ -748,20 +748,28 @@ pool.query(`
 // Criar sessão de mapeamento
 app.post('/api/mapeamento/sessao', autenticarAdm, async (req, res) => {
   try {
-    const { nome, prefixo_base, total_blocos } = req.body;
-    if (!prefixo_base || !total_blocos) return res.status(400).json({ erro: 'Dados obrigatórios faltando' });
+    const { nome, prefixos, prefixo_base, total_blocos, lado, rua } = req.body;
+    if (!total_blocos) return res.status(400).json({ erro: 'Dados obrigatórios faltando' });
+
+    // Suporte a array de prefixos (novo) ou prefixo_base único (legado)
+    const listaPrefixos = prefixos || Array.from({length: total_blocos}, () => prefixo_base);
+
     const id = uuidv4();
     await pool.query(
       'INSERT INTO mapeamento_sessoes (id, nome, prefixo_base, total_blocos) VALUES ($1,$2,$3,$4)',
-      [id, nome || `Mapeamento ${new Date().toLocaleDateString('pt-BR')}`, prefixo_base, total_blocos]
+      [id, nome || `Mapeamento ${new Date().toLocaleDateString('pt-BR')}`, listaPrefixos[0] || prefixo_base, total_blocos]
     );
-    // Criar blocos e níveis automaticamente
-    for (let b = 1; b <= total_blocos; b++) {
+
+    for (let b = 0; b < total_blocos; b++) {
       const blocoId = uuidv4();
-      await pool.query('INSERT INTO mapeamento_blocos (id,sessao_id,numero_bloco) VALUES ($1,$2,$3)', [blocoId, id, b]);
+      const prefixo = listaPrefixos[b] || listaPrefixos[0];
+      await pool.query(
+        'INSERT INTO mapeamento_blocos (id,sessao_id,numero_bloco) VALUES ($1,$2,$3)',
+        [blocoId, id, b + 1]
+      );
       for (let n = 0; n <= 10; n++) {
         const nivel_str = String(n).padStart(2, '0');
-        const novo_nome = `${prefixo_base} ${nivel_str}`;
+        const novo_nome = `${prefixo} ${nivel_str}`;
         await pool.query(
           'INSERT INTO mapeamento_niveis (id,bloco_id,sessao_id,nivel,novo_nome) VALUES ($1,$2,$3,$4,$5)',
           [uuidv4(), blocoId, id, n, novo_nome]
