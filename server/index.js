@@ -715,6 +715,154 @@ app.get('/api/transitorio/locais', async (req, res) => {
   } catch(e) { res.json([]); }
 });
 
+// ── MAPEAMENTO DE LOCAIS ─────────────────────────────────────
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS mapeamento_sessoes (
+    id TEXT PRIMARY KEY,
+    nome TEXT,
+    prefixo_base TEXT,
+    total_blocos INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'ativo',
+    criado_em TIMESTAMPTZ DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS mapeamento_blocos (
+    id TEXT PRIMARY KEY,
+    sessao_id TEXT,
+    numero_bloco INTEGER,
+    status TEXT DEFAULT 'pendente',
+    criado_em TIMESTAMPTZ DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS mapeamento_niveis (
+    id TEXT PRIMARY KEY,
+    bloco_id TEXT,
+    sessao_id TEXT,
+    nivel INTEGER,
+    novo_nome TEXT,
+    id_local_bipado TEXT,
+    status TEXT DEFAULT 'pendente',
+    criado_em TIMESTAMPTZ DEFAULT now()
+  );
+`).catch(console.error);
+
+// Criar sessão de mapeamento
+app.post('/api/mapeamento/sessao', autenticarAdm, async (req, res) => {
+  try {
+    const { nome, prefixo_base, total_blocos } = req.body;
+    if (!prefixo_base || !total_blocos) return res.status(400).json({ erro: 'Dados obrigatórios faltando' });
+    const id = uuidv4();
+    await pool.query(
+      'INSERT INTO mapeamento_sessoes (id, nome, prefixo_base, total_blocos) VALUES ($1,$2,$3,$4)',
+      [id, nome || `Mapeamento ${new Date().toLocaleDateString('pt-BR')}`, prefixo_base, total_blocos]
+    );
+    // Criar blocos e níveis automaticamente
+    for (let b = 1; b <= total_blocos; b++) {
+      const blocoId = uuidv4();
+      await pool.query('INSERT INTO mapeamento_blocos (id,sessao_id,numero_bloco) VALUES ($1,$2,$3)', [blocoId, id, b]);
+      for (let n = 0; n <= 10; n++) {
+        const nivel_str = String(n).padStart(2, '0');
+        const novo_nome = `${prefixo_base} ${nivel_str}`;
+        await pool.query(
+          'INSERT INTO mapeamento_niveis (id,bloco_id,sessao_id,nivel,novo_nome) VALUES ($1,$2,$3,$4,$5)',
+          [uuidv4(), blocoId, id, n, novo_nome]
+        );
+      }
+    }
+    res.json({ id });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Listar sessões
+app.get('/api/mapeamento/sessoes', autenticarAdm, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM mapeamento_sessoes ORDER BY criado_em DESC');
+    res.json(rows);
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Buscar sessão com progresso
+app.get('/api/mapeamento/sessao/:id', async (req, res) => {
+  try {
+    const { rows: [sessao] } = await pool.query('SELECT * FROM mapeamento_sessoes WHERE id=$1', [req.params.id]);
+    if (!sessao) return res.status(404).json({ erro: 'Sessão não encontrada' });
+    const { rows: blocos } = await pool.query('SELECT * FROM mapeamento_blocos WHERE sessao_id=$1 ORDER BY numero_bloco', [req.params.id]);
+    for (const b of blocos) {
+      const { rows: niveis } = await pool.query('SELECT * FROM mapeamento_niveis WHERE bloco_id=$1 ORDER BY nivel', [b.id]);
+      b.niveis = niveis;
+    }
+    res.json({ ...sessao, blocos });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Buscar bloco pelo número bipado
+app.get('/api/mapeamento/bloco', async (req, res) => {
+  try {
+    const { sessao_id, numero } = req.query;
+    const { rows } = await pool.query(
+      'SELECT * FROM mapeamento_blocos WHERE sessao_id=$1 AND numero_bloco=$2',
+      [sessao_id, parseInt(numero)]
+    );
+    if (!rows.length) return res.status(404).json({ erro: 'Bloco não encontrado' });
+    const bloco = rows[0];
+    const { rows: niveis } = await pool.query(
+      'SELECT * FROM mapeamento_niveis WHERE bloco_id=$1 ORDER BY nivel',
+      [bloco.id]
+    );
+    res.json({ ...bloco, niveis });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Registrar bipagem de nível
+app.patch('/api/mapeamento/nivel/:id', async (req, res) => {
+  try {
+    const { id_local_bipado, status } = req.body;
+    // Verificar duplicata
+    if (id_local_bipado) {
+      const { rows } = await pool.query(
+        'SELECT n.nivel, b.numero_bloco FROM mapeamento_niveis n JOIN mapeamento_blocos b ON b.id=n.bloco_id WHERE n.id_local_bipado=$1',
+        [id_local_bipado]
+      );
+      if (rows.length) return res.status(409).json({ erro: `Código já bipado no Bloco ${rows[0].numero_bloco}, Nível ${rows[0].nivel}` });
+    }
+    await pool.query(
+      'UPDATE mapeamento_niveis SET id_local_bipado=$1, status=$2 WHERE id=$3',
+      [id_local_bipado || null, status || 'mapeado', req.params.id]
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Refazer bloco (limpar bipagens)
+app.patch('/api/mapeamento/bloco/:id/refazer', async (req, res) => {
+  try {
+    await pool.query('UPDATE mapeamento_niveis SET id_local_bipado=NULL, status=$1 WHERE bloco_id=$2', ['pendente', req.params.id]);
+    await pool.query('UPDATE mapeamento_blocos SET status=$1 WHERE id=$2', ['pendente', req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Confirmar bloco
+app.patch('/api/mapeamento/bloco/:id/confirmar', async (req, res) => {
+  try {
+    await pool.query('UPDATE mapeamento_blocos SET status=$1 WHERE id=$2', ['confirmado', req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Exportar sessão como JSON para gerar Excel no frontend
+app.get('/api/mapeamento/sessao/:id/exportar', async (req, res) => {
+  try {
+    const { rows: niveis } = await pool.query(`
+      SELECT b.numero_bloco, n.nivel, n.novo_nome, n.id_local_bipado, n.status
+      FROM mapeamento_niveis n
+      JOIN mapeamento_blocos b ON b.id = n.bloco_id
+      WHERE n.sessao_id=$1
+      ORDER BY b.numero_bloco, n.nivel
+    `, [req.params.id]);
+    res.json(niveis);
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // Total de locais altos cadastrados
 app.get('/api/locais-altos', autenticarAdm, async (req, res) => {
   try {
@@ -1052,6 +1200,7 @@ app.get('/curva-abc', (req, res) => res.sendFile(path.join(__dirname, '../public
 app.get('/curva-abc/*', (req, res) => res.sendFile(path.join(__dirname, '../public/curva-abc/index.html')));
 app.get('/armazenagem', (req, res) => res.sendFile(path.join(__dirname, '../public/armazenagem/index.html')));
 app.get('/transitorio', (req, res) => res.sendFile(path.join(__dirname, '../public/transitorio/index.html')));
+app.get('/mapeamento', (req, res) => res.sendFile(path.join(__dirname, '../public/mapeamento/index.html')));
 app.get('/faturamento', (req, res) => res.sendFile(path.join(__dirname, '../public/faturamento/index.html')));
 app.get('/expedicao', (req, res) => res.sendFile(path.join(__dirname, '../public/expedicao/index.html')));
 app.get('/expedicao-coletor', (req, res) => res.sendFile(path.join(__dirname, '../public/expedicao-coletor/index.html')));
