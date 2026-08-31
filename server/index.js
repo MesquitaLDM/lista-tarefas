@@ -715,6 +715,73 @@ app.get('/api/transitorio/locais', async (req, res) => {
   } catch(e) { res.json([]); }
 });
 
+// Buscar locais que têm um EAN, ordenados por proximidade ao local bipado
+app.get('/api/transitorio/locais-proximos', async (req, res) => {
+  try {
+    const { ean, endereco } = req.query;
+    if (!ean) return res.status(400).json({ erro: 'EAN não informado' });
+
+    const { rows: itensDoEan } = await pool.query('SELECT * FROM transitorio_locais WHERE ean=$1', [ean]);
+    if (!itensDoEan.length) return res.json({ locais: [], endereco_ref: endereco || null });
+
+    if (!endereco) return res.json({ locais: itensDoEan, endereco_ref: null });
+
+    // Resolver endereço de referência a partir do código bipado (005000 + id_local) ou texto direto
+    let refDescricao = endereco.trim();
+    const PREFIXO = '005000';
+    if (refDescricao.startsWith(PREFIXO)) {
+      const idLocal = refDescricao.slice(PREFIXO.length).replace(/^0+/, '');
+      const idLocalOriginal = refDescricao.slice(PREFIXO.length);
+
+      let localRef = itensDoEan.find(r =>
+        String(r.id_local).trim() === idLocal || String(r.id_local).trim() === idLocalOriginal
+      );
+
+      if (localRef) {
+        refDescricao = localRef.local;
+      } else {
+        const { rows: picking } = await pool.query(
+          'SELECT id_local, local FROM transitorio_locais WHERE id_local=$1 OR id_local=$2 LIMIT 1',
+          [idLocal, idLocalOriginal]
+        );
+        if (picking.length) {
+          refDescricao = picking[0].local;
+        } else {
+          const { rows: vazios } = await pool.query(
+            'SELECT id_local, descricao FROM transitorio_locais_vazios WHERE id_local=$1 OR id_local=$2 LIMIT 1',
+            [idLocal, idLocalOriginal]
+          );
+          if (vazios.length) {
+            refDescricao = vazios[0].descricao;
+          } else {
+            return res.status(404).json({ erro: 'Local não encontrado', id_local: idLocal });
+          }
+        }
+      }
+    }
+
+    const partes = refDescricao.trim().split(/\s+/);
+    const [refCorredor, refRua, refColuna, refNivel] = partes;
+
+    function calcProximidade(item) {
+      const lp = (item.local || '').trim().split(/\s+/);
+      const [lCorredor, lRua, lColuna, lNivel] = lp;
+      let score = 0;
+      if (lCorredor === refCorredor) score += 1000;
+      score -= Math.abs(parseInt(lRua || 0) - parseInt(refRua || 0)) * 10;
+      score -= Math.abs(parseInt(lColuna || 0) - parseInt(refColuna || 0)) * 2;
+      score -= Math.abs(parseInt(lNivel || 0) - parseInt(refNivel || 0));
+      return score;
+    }
+
+    const ordenados = itensDoEan
+      .map(r => ({ ...r, score: calcProximidade(r) }))
+      .sort((a, b) => b.score - a.score);
+
+    res.json({ locais: ordenados, endereco_ref: refDescricao });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // ── MAPEAMENTO DE LOCAIS ─────────────────────────────────────
 
 pool.query(`

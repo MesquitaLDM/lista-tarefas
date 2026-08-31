@@ -164,6 +164,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <script>
 let username = null;
 let locaisBaixos = []; // {sku, descricao, ean, local, tipo_local, qtd, disponivel}
+let _compactarEan = null;
+let _compactarEncontrados = [];
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -257,32 +259,131 @@ function buscarEAN() {
     return;
   }
 
-  const primeiro = encontrados[0];
-  const locaisHtml = encontrados.map(l => `
-    <div class="local-item">
-      <span class="local-badge ${badgeClass(l.tipo_local)}">${(l.tipo_local||'—').split(' ').slice(0,2).join(' ')}</span>
+  // Item tem locais de picking — primeiro pede o local atual para compactar no mais próximo
+  _compactarEan = ean;
+  _compactarEncontrados = encontrados;
+  mostrarPromptLocalAtualCompactar();
+}
+
+function localItemHtml(l, destaque) {
+  return `
+    <div class="local-item" style="${destaque?'background:var(--green-light);':''}">
+      <span class="local-badge ${destaque?'':badgeClass(l.tipo_local)}" style="${destaque?'background:var(--green-light);color:var(--green)':''}">
+        ${destaque?'★ Mais próximo':(l.tipo_local||'—').split(' ').slice(0,2).join(' ')}
+      </span>
       <div class="local-info">
-        <div class="local-end">${l.local||'—'}</div>
+        <div class="local-end" style="${destaque?'color:var(--green)':''}">${l.local||'—'}</div>
         <div class="local-tipo">${l.tipo_local||'—'}</div>
       </div>
       <div class="local-qtd">
         <div class="qval">${l.disponivel ?? l.qtd ?? '—'}</div>
         <div class="qlabel">Disponível</div>
       </div>
-    </div>`).join('');
+    </div>`;
+}
+
+function mostrarPromptLocalAtualCompactar() {
+  const resultEl = document.getElementById('resultado');
+  const primeiro = _compactarEncontrados[0];
+  resultEl.innerHTML = `
+    <div class="scan-box">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <i class="ti ti-map-pin" style="color:var(--orange);font-size:20px"></i>
+        <strong>${primeiro.descricao}</strong>
+      </div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Bipe o local onde você está agora para ver os locais mais próximos para compactar.</p>
+      <div style="display:flex;gap:8px">
+        <input class="scan-input" id="endereco-compactar-input" placeholder="Bipe a etiqueta do local atual..." 
+          style="flex:1;font-size:14px" autocomplete="off" inputmode="numeric"
+          onkeydown="if(event.key==='Enter') buscarLocalAtualCompactar()">
+        <button class="scan-btn" onclick="buscarLocalAtualCompactar()"><i class="ti ti-map-pin"></i></button>
+      </div>
+      <div style="margin-top:10px;text-align:center">
+        <button onclick="renderTodosLocaisCompactar()" 
+          style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+          Não sei o local atual — ver todos os locais
+        </button>
+      </div>
+    </div>`;
+  document.getElementById('ean-input').value = '';
+  setTimeout(() => document.getElementById('endereco-compactar-input')?.focus(), 100);
+}
+
+async function buscarLocalAtualCompactar() {
+  const codigo = document.getElementById('endereco-compactar-input')?.value.trim();
+  if (!codigo) return;
+  const resultEl = document.getElementById('resultado');
+  resultEl.innerHTML = `<div class="empty-state"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i><p>Buscando locais mais próximos...</p></div>`;
+
+  try {
+    const r = await fetch(`/api/transitorio/locais-proximos?ean=${encodeURIComponent(_compactarEan)}&endereco=${encodeURIComponent(codigo)}`);
+    const data = await r.json();
+
+    if (data.erro) {
+      const idMostrar = data.id_local || codigo;
+      resultEl.innerHTML = `
+        <div class="not-found">
+          <i class="ti ti-map-off"></i>
+          <p>Local com ID <strong>${idMostrar}</strong> não encontrado.</p>
+        </div>
+        <div style="margin-top:10px;text-align:center">
+          <button onclick="mostrarPromptLocalAtualCompactar()" 
+            style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+            <i class="ti ti-arrow-left"></i> Tentar novamente
+          </button>
+        </div>`;
+      return;
+    }
+
+    const locais = data.locais || [];
+    const endRef = data.endereco_ref || codigo;
+    const primeiro = _compactarEncontrados[0];
+    const locaisHtml = locais.map((l, i) => localItemHtml(l, i === 0)).join('');
+
+    resultEl.innerHTML = `
+      <div class="result-box">
+        <div class="result-header">
+          <div class="result-sku">SKU ${primeiro.sku}</div>
+          <div class="result-nome">${primeiro.descricao}</div>
+          <div class="result-ean" style="color:var(--amber)"><i class="ti ti-map-pin" style="font-size:10px"></i> Referência: ${endRef}</div>
+        </div>
+        <div class="locais-lista">${locaisHtml}</div>
+      </div>
+      <div style="margin-top:10px;text-align:center;display:flex;gap:8px;justify-content:center">
+        <button onclick="mostrarPromptLocalAtualCompactar()" 
+          style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+          <i class="ti ti-arrow-left"></i> Novo local
+        </button>
+        <button onclick="renderTodosLocaisCompactar()" 
+          style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+          Ver todos os locais
+        </button>
+      </div>`;
+  } catch(e) {
+    resultEl.innerHTML = `<div class="not-found"><i class="ti ti-alert-circle"></i><p>Erro ao buscar locais próximos.</p></div>`;
+  }
+}
+
+function renderTodosLocaisCompactar() {
+  const resultEl = document.getElementById('resultado');
+  const primeiro = _compactarEncontrados[0];
+  const locaisHtml = _compactarEncontrados.map(l => localItemHtml(l, false)).join('');
 
   resultEl.innerHTML = `
     <div class="result-box">
       <div class="result-header">
         <div class="result-sku">SKU ${primeiro.sku}</div>
         <div class="result-nome">${primeiro.descricao}</div>
-        <div class="result-ean"><i class="ti ti-barcode" style="font-size:10px"></i> ${ean}</div>
+        <div class="result-ean"><i class="ti ti-barcode" style="font-size:10px"></i> ${_compactarEan}</div>
       </div>
       <div class="locais-lista">${locaisHtml}</div>
+    </div>
+    <div style="margin-top:10px;text-align:center">
+      <button onclick="document.getElementById('resultado').innerHTML='';document.getElementById('ean-input').value='';document.getElementById('ean-input').focus()" 
+        style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+        <i class="ti ti-arrow-left"></i> Nova busca
+      </button>
     </div>`;
-
-  document.getElementById('ean-input').value = '';
-  document.getElementById('ean-input').focus();
 }
 
 async function buscarVazios() {
