@@ -878,6 +878,79 @@ app.patch('/api/mapeamento/sessao/:id/nome', autenticarAdm, async (req, res) => 
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
+// Editar total de blocos da sessão (adiciona ou remove blocos no final)
+app.patch('/api/mapeamento/sessao/:id/blocos', autenticarAdm, async (req, res) => {
+  try {
+    const novoTotal = parseInt(req.body.total_blocos);
+    if (!novoTotal || novoTotal < 1) return res.status(400).json({ erro: 'Quantidade inválida' });
+
+    const { rows: blocos } = await pool.query(
+      'SELECT * FROM mapeamento_blocos WHERE sessao_id=$1 ORDER BY numero_bloco', [req.params.id]
+    );
+    const atual = blocos.length;
+
+    if (novoTotal === atual) {
+      return res.json({ ok: true, total_blocos: novoTotal });
+    }
+
+    if (novoTotal < atual) {
+      // Remove os blocos excedentes do final (e seus níveis)
+      const idsRemover = blocos.filter(b => b.numero_bloco > novoTotal).map(b => b.id);
+      if (idsRemover.length) {
+        await pool.query('DELETE FROM mapeamento_niveis WHERE bloco_id = ANY($1)', [idsRemover]);
+        await pool.query('DELETE FROM mapeamento_blocos WHERE id = ANY($1)', [idsRemover]);
+      }
+    } else {
+      if (atual === 0) return res.status(400).json({ erro: 'Sessão sem blocos para usar como referência' });
+
+      // Descobre o prefixo do último bloco e o passo de incremento entre colunas
+      async function prefixoDoBloco(blocoId) {
+        const { rows } = await pool.query(
+          'SELECT novo_nome FROM mapeamento_niveis WHERE bloco_id=$1 AND nivel=0', [blocoId]
+        );
+        const nome = rows[0]?.novo_nome || '';
+        return nome.replace(/\s\d{2}$/, ''); // remove o sufixo do nível (" 00")
+      }
+
+      let passo = 2;
+      const ultimoPrefixo = await prefixoDoBloco(blocos[atual - 1].id);
+      if (atual >= 2) {
+        const penultimoPrefixo = await prefixoDoBloco(blocos[atual - 2].id);
+        const numUlt = parseInt(ultimoPrefixo.split(' ').pop());
+        const numPen = parseInt(penultimoPrefixo.split(' ').pop());
+        if (!isNaN(numUlt) && !isNaN(numPen) && numUlt !== numPen) passo = numUlt - numPen;
+      }
+
+      const partes = ultimoPrefixo.split(' ');
+      const colStr = partes.pop();
+      const head = partes.join(' ');
+      const padLen = colStr.length;
+      let colAtual = parseInt(colStr) || 0;
+
+      for (let b = atual; b < novoTotal; b++) {
+        colAtual += passo;
+        const novoPrefixo = `${head} ${String(colAtual).padStart(padLen, '0')}`;
+        const blocoId = uuidv4();
+        await pool.query(
+          'INSERT INTO mapeamento_blocos (id,sessao_id,numero_bloco) VALUES ($1,$2,$3)',
+          [blocoId, req.params.id, b + 1]
+        );
+        for (let n = 0; n <= 10; n++) {
+          const nivel_str = String(n).padStart(2, '0');
+          const novo_nome = `${novoPrefixo} ${nivel_str}`;
+          await pool.query(
+            'INSERT INTO mapeamento_niveis (id,bloco_id,sessao_id,nivel,novo_nome) VALUES ($1,$2,$3,$4,$5)',
+            [uuidv4(), blocoId, req.params.id, n, novo_nome]
+          );
+        }
+      }
+    }
+
+    await pool.query('UPDATE mapeamento_sessoes SET total_blocos=$1 WHERE id=$2', [novoTotal, req.params.id]);
+    res.json({ ok: true, total_blocos: novoTotal });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // Exportar sessão como JSON para gerar Excel no frontend
 app.get('/api/mapeamento/sessao/:id/exportar', async (req, res) => {
   try {

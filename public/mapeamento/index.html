@@ -202,16 +202,19 @@ input.finput:focus{border-color:var(--orange)}
   </div>
 </div>
 
-<!-- MODAL: RENOMEAR SESSÃO -->
+<!-- MODAL: EDITAR SESSÃO -->
 <div id="modal-renomear" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;align-items:center;justify-content:center;padding:20px">
   <div class="box" style="max-width:400px;margin:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <h3 style="font-size:15px;font-weight:700">Renomear sessão</h3>
+      <h3 style="font-size:15px;font-weight:700">Editar sessão</h3>
       <button class="icon-btn" onclick="fecharModalRenomear()"><i class="ti ti-x"></i></button>
     </div>
     <div id="renomear-err" style="display:none;font-size:12px;color:var(--red);padding:8px;background:var(--red-light);border-radius:var(--radius);margin-bottom:8px"></div>
-    <label class="flabel">Novo nome</label>
+    <label class="flabel">Nome</label>
     <input class="finput" id="renomear-nome" placeholder="Nome da sessão" style="margin-bottom:14px">
+    <label class="flabel">Total de blocos</label>
+    <input class="finput" id="renomear-blocos" type="number" min="1" placeholder="Ex: 30" style="margin-bottom:6px">
+    <small style="font-size:11px;color:var(--text3);display:block;margin-bottom:14px">Aumentar adiciona blocos ao final seguindo o mesmo padrão de coluna. Diminuir remove os blocos finais (e apaga o que já foi bipado neles).</small>
     <div style="display:flex;gap:8px">
       <button class="btn-secondary" onclick="fecharModalRenomear()" style="flex:1">Cancelar</button>
       <button class="btn-primary" onclick="confirmarRenomear()" style="flex:2"><i class="ti ti-check"></i> Salvar</button>
@@ -411,7 +414,7 @@ async function carregarSessoes() {
   el.innerHTML = sessoes.map(s => `
     <div class="sessao-card" onclick="abrirSessao('${s.id}')">
       <div class="sessao-actions">
-        <button title="Renomear" onclick="event.stopPropagation();abrirRenomear('${s.id}','${s.nome.replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i></button>
+        <button title="Editar" onclick="event.stopPropagation();abrirRenomear('${s.id}','${s.nome.replace(/'/g,"\\'")}',${s.total_blocos})"><i class="ti ti-pencil"></i></button>
         <button class="del" title="Excluir" onclick="event.stopPropagation();excluirSessao('${s.id}','${s.nome.replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i></button>
       </div>
       <div class="sessao-nome">${s.nome}</div>
@@ -441,12 +444,15 @@ async function excluirSessao(id, nome) {
   } catch(e) { alerta('Erro de conexão ao excluir.'); }
 }
 
-// ── RENOMEAR SESSÃO ───────────────────────────────────────────
+// ── EDITAR SESSÃO (nome + blocos) ────────────────────────────
 let _renomearId = null;
+let _renomearBlocosOriginal = null;
 
-function abrirRenomear(id, nomeAtual) {
+function abrirRenomear(id, nomeAtual, totalBlocosAtual) {
   _renomearId = id;
+  _renomearBlocosOriginal = totalBlocosAtual;
   document.getElementById('renomear-nome').value = nomeAtual;
+  document.getElementById('renomear-blocos').value = totalBlocosAtual;
   document.getElementById('renomear-err').style.display = 'none';
   document.getElementById('modal-renomear').style.display = 'flex';
   setTimeout(() => document.getElementById('renomear-nome').select(), 100);
@@ -455,21 +461,43 @@ function abrirRenomear(id, nomeAtual) {
 function fecharModalRenomear() {
   document.getElementById('modal-renomear').style.display = 'none';
   _renomearId = null;
+  _renomearBlocosOriginal = null;
 }
 
 async function confirmarRenomear() {
   const nome = document.getElementById('renomear-nome').value.trim();
+  const novoTotalBlocos = parseInt(document.getElementById('renomear-blocos').value);
   const errEl = document.getElementById('renomear-err');
   errEl.style.display = 'none';
+
   if (!nome) { errEl.textContent = 'Informe o nome'; errEl.style.display = 'block'; return; }
+  if (!novoTotalBlocos || novoTotalBlocos < 1) { errEl.textContent = 'Informe uma quantidade de blocos válida'; errEl.style.display = 'block'; return; }
+
+  const mudouBlocos = novoTotalBlocos !== _renomearBlocosOriginal;
+  if (mudouBlocos && novoTotalBlocos < _renomearBlocosOriginal) {
+    const ok = confirm(`Reduzir de ${_renomearBlocosOriginal} para ${novoTotalBlocos} blocos vai apagar permanentemente os últimos ${_renomearBlocosOriginal - novoTotalBlocos} bloco(s), incluindo o que já foi bipado neles.\n\nDeseja continuar?`);
+    if (!ok) return;
+  }
+
   try {
-    const r = await fetch(`/api/mapeamento/sessao/${_renomearId}/nome`, {
+    const rNome = await fetch(`/api/mapeamento/sessao/${_renomearId}/nome`, {
       method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include',
       body: JSON.stringify({ nome })
     });
-    if (r.status === 401) { fecharModalRenomear(); mostrarLogin(); return; }
-    const data = await r.json();
-    if (data.erro) { errEl.textContent = data.erro; errEl.style.display = 'block'; return; }
+    if (rNome.status === 401) { fecharModalRenomear(); mostrarLogin(); return; }
+    const dataNome = await rNome.json();
+    if (dataNome.erro) { errEl.textContent = dataNome.erro; errEl.style.display = 'block'; return; }
+
+    if (mudouBlocos) {
+      const rBlocos = await fetch(`/api/mapeamento/sessao/${_renomearId}/blocos`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include',
+        body: JSON.stringify({ total_blocos: novoTotalBlocos })
+      });
+      if (rBlocos.status === 401) { fecharModalRenomear(); mostrarLogin(); return; }
+      const dataBlocos = await rBlocos.json();
+      if (dataBlocos.erro) { errEl.textContent = dataBlocos.erro; errEl.style.display = 'block'; return; }
+    }
+
     fecharModalRenomear();
     carregarSessoes();
   } catch(e) { errEl.textContent = 'Erro de conexão'; errEl.style.display = 'block'; }
