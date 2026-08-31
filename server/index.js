@@ -728,6 +728,7 @@ app.get('/api/transitorio/locais-proximos', async (req, res) => {
 
     // Resolver endereço de referência a partir do código bipado (005000 + id_local) ou texto direto
     let refDescricao = endereco.trim();
+    let refItemId = null;
     const PREFIXO = '005000';
     if (refDescricao.startsWith(PREFIXO)) {
       const idLocal = refDescricao.slice(PREFIXO.length).replace(/^0+/, '');
@@ -739,13 +740,15 @@ app.get('/api/transitorio/locais-proximos', async (req, res) => {
 
       if (localRef) {
         refDescricao = localRef.local;
+        refItemId = localRef.id;
       } else {
         const { rows: picking } = await pool.query(
-          'SELECT id_local, local FROM transitorio_locais WHERE id_local=$1 OR id_local=$2 LIMIT 1',
+          'SELECT id, id_local, local FROM transitorio_locais WHERE id_local=$1 OR id_local=$2 LIMIT 1',
           [idLocal, idLocalOriginal]
         );
         if (picking.length) {
           refDescricao = picking[0].local;
+          refItemId = picking[0].id;
         } else {
           const { rows: vazios } = await pool.query(
             'SELECT id_local, descricao FROM transitorio_locais_vazios WHERE id_local=$1 OR id_local=$2 LIMIT 1',
@@ -759,6 +762,13 @@ app.get('/api/transitorio/locais-proximos', async (req, res) => {
         }
       }
     }
+
+    // Remove o próprio local de referência da lista de sugestões (não faz sentido compactar nele mesmo)
+    const normEndereco = s => (s || '').trim().replace(/\s+/g, ' ');
+    const refNormalizado = normEndereco(refDescricao);
+    const candidatos = itensDoEan.filter(r =>
+      r.id !== refItemId && normEndereco(r.local) !== refNormalizado
+    );
 
     const partes = refDescricao.trim().split(/\s+/);
     const [refCorredor, refRua, refColuna, refNivel] = partes;
@@ -774,7 +784,7 @@ app.get('/api/transitorio/locais-proximos', async (req, res) => {
       return score;
     }
 
-    const ordenados = itensDoEan
+    const ordenados = candidatos
       .map(r => ({ ...r, score: calcProximidade(r) }))
       .sort((a, b) => b.score - a.score);
 

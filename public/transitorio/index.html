@@ -338,6 +338,22 @@ async function buscarLocalAtualCompactar() {
     const locais = data.locais || [];
     const endRef = data.endereco_ref || codigo;
     const primeiro = _compactarEncontrados[0];
+
+    if (!locais.length) {
+      resultEl.innerHTML = `
+        <div class="not-found">
+          <i class="ti ti-map-off"></i>
+          <p>Este item só existe no local bipado (<strong>${endRef}</strong>).<br>Não há outro local para compactar.</p>
+        </div>
+        <div style="margin-top:10px;text-align:center">
+          <button onclick="document.getElementById('resultado').innerHTML='';document.getElementById('ean-input').value='';document.getElementById('ean-input').focus()" 
+            style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+            <i class="ti ti-arrow-left"></i> Nova busca
+          </button>
+        </div>`;
+      return;
+    }
+
     const locaisHtml = locais.map((l, i) => localItemHtml(l, i === 0)).join('');
 
     resultEl.innerHTML = `
