@@ -340,17 +340,7 @@ async function buscarLocalAtualCompactar() {
     const primeiro = _compactarEncontrados[0];
 
     if (!locais.length) {
-      resultEl.innerHTML = `
-        <div class="not-found">
-          <i class="ti ti-map-off"></i>
-          <p>Este item só existe no local bipado (<strong>${endRef}</strong>).<br>Não há outro local para compactar.</p>
-        </div>
-        <div style="margin-top:10px;text-align:center">
-          <button onclick="document.getElementById('resultado').innerHTML='';document.getElementById('ean-input').value='';document.getElementById('ean-input').focus()" 
-            style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
-            <i class="ti ti-arrow-left"></i> Nova busca
-          </button>
-        </div>`;
+      buscarVaziosParaCompactar(codigo, endRef);
       return;
     }
 
@@ -377,6 +367,88 @@ async function buscarLocalAtualCompactar() {
       </div>`;
   } catch(e) {
     resultEl.innerHTML = `<div class="not-found"><i class="ti ti-alert-circle"></i><p>Erro ao buscar locais próximos.</p></div>`;
+  }
+}
+
+async function buscarVaziosParaCompactar(codigo, endRefFallback) {
+  const resultEl = document.getElementById('resultado');
+  const primeiro = _compactarEncontrados[0];
+  resultEl.innerHTML = `<div class="empty-state"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i><p>Este item só existe neste local. Buscando locais vazios próximos...</p></div>`;
+
+  try {
+    const r = await fetch('/api/transitorio/vazios-proximos?endereco=' + encodeURIComponent(codigo));
+    const data = await r.json();
+
+    if (data.erro) {
+      const idMostrar = data.id_local || codigo;
+      resultEl.innerHTML = `
+        <div class="not-found">
+          <i class="ti ti-map-off"></i>
+          <p>Local com ID <strong>${idMostrar}</strong> não encontrado.</p>
+        </div>
+        <div style="margin-top:10px;text-align:center">
+          <button onclick="mostrarPromptLocalAtualCompactar()" 
+            style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+            <i class="ti ti-arrow-left"></i> Tentar novamente
+          </button>
+        </div>`;
+      return;
+    }
+
+    const vazios = data.vazios || data;
+    const endRef = data.endereco_ref || endRefFallback || codigo;
+
+    if (!vazios.length) {
+      resultEl.innerHTML = `
+        <div class="not-found">
+          <i class="ti ti-map-off"></i>
+          <p>Este item só existe no local bipado (<strong>${endRef}</strong>) e nenhum local vazio foi encontrado próximo.</p>
+        </div>
+        <div style="margin-top:10px;text-align:center">
+          <button onclick="document.getElementById('resultado').innerHTML='';document.getElementById('ean-input').value='';document.getElementById('ean-input').focus()" 
+            style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+            <i class="ti ti-arrow-left"></i> Nova busca
+          </button>
+        </div>`;
+      return;
+    }
+
+    const vaziosHtml = vazios.map((v, i) => `
+      <div class="local-item" style="${i===0?'background:var(--green-light);':''}">
+        <span class="local-badge badge-mzn" style="${i===0?'background:var(--green-light);color:var(--green)':''}">
+          ${i===0?'★ Mais próximo':`#${i+1}`}
+        </span>
+        <div class="local-info">
+          <div class="local-end" style="${i===0?'color:var(--green)':''}">${v.descricao||'—'}</div>
+          <div class="local-tipo">${v.classe_local||''} ${v.grupo_classe||''}</div>
+        </div>
+        <span style="font-size:10px;padding:2px 8px;border-radius:6px;background:var(--bg4);color:var(--text3);flex-shrink:0">VAZIO</span>
+      </div>`).join('');
+
+    resultEl.innerHTML = `
+      <div class="result-box">
+        <div class="result-header">
+          <div class="result-sku">SKU ${primeiro.sku}</div>
+          <div class="result-nome">${primeiro.descricao}</div>
+          <div class="result-ean" style="color:var(--amber)"><i class="ti ti-map-pin" style="font-size:10px"></i> Referência: ${endRef}</div>
+        </div>
+        <div style="padding:10px 14px;font-size:11px;color:var(--text3);border-bottom:1px solid var(--border)">
+          <i class="ti ti-info-circle"></i> Este item só existe neste local. Locais vazios próximos para levar o item:
+        </div>
+        <div class="locais-lista">${vaziosHtml}</div>
+      </div>
+      <div style="margin-top:10px;text-align:center;display:flex;gap:8px;justify-content:center">
+        <button onclick="mostrarPromptLocalAtualCompactar()" 
+          style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+          <i class="ti ti-arrow-left"></i> Novo local
+        </button>
+        <button onclick="document.getElementById('resultado').innerHTML='';document.getElementById('ean-input').value='';document.getElementById('ean-input').focus()" 
+          style="padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer">
+          Nova busca
+        </button>
+      </div>`;
+  } catch(e) {
+    resultEl.innerHTML = `<div class="not-found"><i class="ti ti-alert-circle"></i><p>Erro ao buscar locais vazios.</p></div>`;
   }
 }
 
