@@ -857,6 +857,27 @@ app.patch('/api/mapeamento/bloco/:id/confirmar', async (req, res) => {
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
+// Excluir sessão de mapeamento (cascata)
+app.delete('/api/mapeamento/sessao/:id', autenticarAdm, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM mapeamento_niveis WHERE sessao_id=$1', [id]);
+    await pool.query('DELETE FROM mapeamento_blocos WHERE sessao_id=$1', [id]);
+    await pool.query('DELETE FROM mapeamento_sessoes WHERE id=$1', [id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Renomear sessão de mapeamento
+app.patch('/api/mapeamento/sessao/:id/nome', autenticarAdm, async (req, res) => {
+  try {
+    const { nome } = req.body;
+    if (!nome || !nome.trim()) return res.status(400).json({ erro: 'Nome inválido' });
+    await pool.query('UPDATE mapeamento_sessoes SET nome=$1 WHERE id=$2', [nome.trim(), req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // Exportar sessão como JSON para gerar Excel no frontend
 app.get('/api/mapeamento/sessao/:id/exportar', async (req, res) => {
   try {
