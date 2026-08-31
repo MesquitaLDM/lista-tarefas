@@ -820,7 +820,38 @@ pool.query(`
     status TEXT DEFAULT 'pendente',
     criado_em TIMESTAMPTZ DEFAULT now()
   );
-`).catch(console.error);
+`).then(async () => {
+  // Corrige blocos duplicados criados por uma falha antiga (condição de corrida
+  // ao clicar duas vezes em "Salvar" na edição de quantidade de blocos).
+  // Para cada duplicata, mantém o bloco com mais progresso e remove o(s) extra(s).
+  try {
+    const { rows: dups } = await pool.query(`
+      SELECT sessao_id, numero_bloco FROM mapeamento_blocos
+      GROUP BY sessao_id, numero_bloco HAVING COUNT(*) > 1
+    `);
+    for (const d of dups) {
+      const { rows: candidatos } = await pool.query(`
+        SELECT b.id, b.status,
+          (SELECT COUNT(*) FROM mapeamento_niveis n WHERE n.bloco_id=b.id AND n.status='confirmado') AS niveis_confirmados
+        FROM mapeamento_blocos b
+        WHERE b.sessao_id=$1 AND b.numero_bloco=$2
+        ORDER BY (b.status='confirmado') DESC, niveis_confirmados DESC, b.criado_em ASC
+      `, [d.sessao_id, d.numero_bloco]);
+      const remover = candidatos.slice(1).map(c => c.id);
+      if (remover.length) {
+        await pool.query('DELETE FROM mapeamento_niveis WHERE bloco_id = ANY($1)', [remover]);
+        await pool.query('DELETE FROM mapeamento_blocos WHERE id = ANY($1)', [remover]);
+      }
+    }
+    if (dups.length) console.log(`[MAPEAMENTO] ${dups.length} bloco(s) duplicado(s) corrigido(s) automaticamente.`);
+  } catch(e) { console.error('[MAPEAMENTO] Erro ao corrigir blocos duplicados:', e.message); }
+
+  // Trava de segurança no banco: impede que dois blocos com o mesmo número
+  // coexistam na mesma sessão, mesmo que algum caminho de código futuro falhe.
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_mapeamento_blocos_unico ON mapeamento_blocos (sessao_id, numero_bloco)
+  `).catch(e => console.error('[MAPEAMENTO] Erro ao criar índice único:', e.message));
+}).catch(console.error);
 
 // Criar sessão de mapeamento
 app.post('/api/mapeamento/sessao', autenticarAdm, async (req, res) => {
@@ -957,16 +988,24 @@ app.patch('/api/mapeamento/sessao/:id/nome', autenticarAdm, async (req, res) => 
 
 // Editar total de blocos da sessão (adiciona ou remove blocos no final)
 app.patch('/api/mapeamento/sessao/:id/blocos', autenticarAdm, async (req, res) => {
+  const client = await pool.connect();
   try {
     const novoTotal = parseInt(req.body.total_blocos);
-    if (!novoTotal || novoTotal < 1) return res.status(400).json({ erro: 'Quantidade inválida' });
+    if (!novoTotal || novoTotal < 1) { return res.status(400).json({ erro: 'Quantidade inválida' }); }
 
-    const { rows: blocos } = await pool.query(
+    await client.query('BEGIN');
+    // Trava a sessão até o fim da transação: se duas requisições chegarem juntas
+    // (ex.: clique duplo no botão Salvar), a segunda espera a primeira terminar
+    // e enxerga a contagem já atualizada, evitando blocos duplicados.
+    await client.query('SELECT id FROM mapeamento_sessoes WHERE id=$1 FOR UPDATE', [req.params.id]);
+
+    const { rows: blocos } = await client.query(
       'SELECT * FROM mapeamento_blocos WHERE sessao_id=$1 ORDER BY numero_bloco', [req.params.id]
     );
     const atual = blocos.length;
 
     if (novoTotal === atual) {
+      await client.query('COMMIT');
       return res.json({ ok: true, total_blocos: novoTotal });
     }
 
@@ -974,15 +1013,15 @@ app.patch('/api/mapeamento/sessao/:id/blocos', autenticarAdm, async (req, res) =
       // Remove os blocos excedentes do final (e seus níveis)
       const idsRemover = blocos.filter(b => b.numero_bloco > novoTotal).map(b => b.id);
       if (idsRemover.length) {
-        await pool.query('DELETE FROM mapeamento_niveis WHERE bloco_id = ANY($1)', [idsRemover]);
-        await pool.query('DELETE FROM mapeamento_blocos WHERE id = ANY($1)', [idsRemover]);
+        await client.query('DELETE FROM mapeamento_niveis WHERE bloco_id = ANY($1)', [idsRemover]);
+        await client.query('DELETE FROM mapeamento_blocos WHERE id = ANY($1)', [idsRemover]);
       }
     } else {
-      if (atual === 0) return res.status(400).json({ erro: 'Sessão sem blocos para usar como referência' });
+      if (atual === 0) { const err = new Error('Sessão sem blocos para usar como referência'); err.status = 400; throw err; }
 
       // Descobre o prefixo do último bloco e o passo de incremento entre colunas
       async function prefixoDoBloco(blocoId) {
-        const { rows } = await pool.query(
+        const { rows } = await client.query(
           'SELECT novo_nome FROM mapeamento_niveis WHERE bloco_id=$1 AND nivel=0', [blocoId]
         );
         const nome = rows[0]?.novo_nome || '';
@@ -1008,14 +1047,14 @@ app.patch('/api/mapeamento/sessao/:id/blocos', autenticarAdm, async (req, res) =
         colAtual += passo;
         const novoPrefixo = `${head} ${String(colAtual).padStart(padLen, '0')}`;
         const blocoId = uuidv4();
-        await pool.query(
+        await client.query(
           'INSERT INTO mapeamento_blocos (id,sessao_id,numero_bloco) VALUES ($1,$2,$3)',
           [blocoId, req.params.id, b + 1]
         );
         for (let n = 0; n <= 10; n++) {
           const nivel_str = String(n).padStart(2, '0');
           const novo_nome = `${novoPrefixo} ${nivel_str}`;
-          await pool.query(
+          await client.query(
             'INSERT INTO mapeamento_niveis (id,bloco_id,sessao_id,nivel,novo_nome) VALUES ($1,$2,$3,$4,$5)',
             [uuidv4(), blocoId, req.params.id, n, novo_nome]
           );
@@ -1023,9 +1062,16 @@ app.patch('/api/mapeamento/sessao/:id/blocos', autenticarAdm, async (req, res) =
       }
     }
 
-    await pool.query('UPDATE mapeamento_sessoes SET total_blocos=$1 WHERE id=$2', [novoTotal, req.params.id]);
+
+    await client.query('UPDATE mapeamento_sessoes SET total_blocos=$1 WHERE id=$2', [novoTotal, req.params.id]);
+    await client.query('COMMIT');
     res.json({ ok: true, total_blocos: novoTotal });
-  } catch(e) { res.status(500).json({ erro: e.message }); }
+  } catch(e) {
+    await client.query('ROLLBACK').catch(()=>{});
+    res.status(e.status || 500).json({ erro: e.message });
+  } finally {
+    client.release();
+  }
 });
 
 // Exportar sessão como JSON para gerar Excel no frontend

@@ -122,6 +122,7 @@ input.finput:focus{border-color:var(--orange)}
 .login-logo h2 span{color:var(--orange)}
 .login-logo p{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-top:2px}
 .login-err{font-size:12px;color:var(--red);margin-bottom:10px;display:none;padding:8px 10px;background:var(--red-light);border-radius:var(--radius)}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -217,7 +218,7 @@ input.finput:focus{border-color:var(--orange)}
     <small style="font-size:11px;color:var(--text3);display:block;margin-bottom:14px">Aumentar adiciona blocos ao final seguindo o mesmo padrão de coluna. Diminuir remove os blocos finais (e apaga o que já foi bipado neles).</small>
     <div style="display:flex;gap:8px">
       <button class="btn-secondary" onclick="fecharModalRenomear()" style="flex:1">Cancelar</button>
-      <button class="btn-primary" onclick="confirmarRenomear()" style="flex:2"><i class="ti ti-check"></i> Salvar</button>
+      <button class="btn-primary" id="btn-salvar-edicao" onclick="confirmarRenomear()" style="flex:2"><i class="ti ti-check"></i> Salvar</button>
     </div>
   </div>
 </div>
@@ -447,6 +448,7 @@ async function excluirSessao(id, nome) {
 // ── EDITAR SESSÃO (nome + blocos) ────────────────────────────
 let _renomearId = null;
 let _renomearBlocosOriginal = null;
+let _salvandoEdicaoSessao = false;
 
 function abrirRenomear(id, nomeAtual, totalBlocosAtual) {
   _renomearId = id;
@@ -465,6 +467,7 @@ function fecharModalRenomear() {
 }
 
 async function confirmarRenomear() {
+  if (_salvandoEdicaoSessao) return; // evita duplo clique disparando duas requisições
   const nome = document.getElementById('renomear-nome').value.trim();
   const novoTotalBlocos = parseInt(document.getElementById('renomear-blocos').value);
   const errEl = document.getElementById('renomear-err');
@@ -478,6 +481,10 @@ async function confirmarRenomear() {
     const ok = confirm(`Reduzir de ${_renomearBlocosOriginal} para ${novoTotalBlocos} blocos vai apagar permanentemente os últimos ${_renomearBlocosOriginal - novoTotalBlocos} bloco(s), incluindo o que já foi bipado neles.\n\nDeseja continuar?`);
     if (!ok) return;
   }
+
+  _salvandoEdicaoSessao = true;
+  const btnSalvar = document.getElementById('btn-salvar-edicao');
+  if (btnSalvar) { btnSalvar.disabled = true; btnSalvar.style.opacity = '0.6'; btnSalvar.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Salvando...'; }
 
   try {
     const rNome = await fetch(`/api/mapeamento/sessao/${_renomearId}/nome`, {
@@ -501,6 +508,10 @@ async function confirmarRenomear() {
     fecharModalRenomear();
     carregarSessoes();
   } catch(e) { errEl.textContent = 'Erro de conexão'; errEl.style.display = 'block'; }
+  finally {
+    _salvandoEdicaoSessao = false;
+    if (btnSalvar) { btnSalvar.disabled = false; btnSalvar.style.opacity = '1'; btnSalvar.innerHTML = '<i class="ti ti-check"></i> Salvar'; }
+  }
 }
 
 async function criarSessao() {
