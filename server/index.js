@@ -810,6 +810,7 @@ pool.query(`
     status TEXT DEFAULT 'pendente',
     criado_em TIMESTAMPTZ DEFAULT now()
   );
+  ALTER TABLE mapeamento_blocos ADD COLUMN IF NOT EXISTS prefixo TEXT;
   CREATE TABLE IF NOT EXISTS mapeamento_niveis (
     id TEXT PRIMARY KEY,
     bloco_id TEXT,
@@ -846,6 +847,17 @@ pool.query(`
     if (dups.length) console.log(`[MAPEAMENTO] ${dups.length} bloco(s) duplicado(s) corrigido(s) automaticamente.`);
   } catch(e) { console.error('[MAPEAMENTO] Erro ao corrigir blocos duplicados:', e.message); }
 
+  // Preenche a coluna "prefixo" dos blocos antigos (criados antes desta versão),
+  // derivando-a do nível 0 já existente, para manter compatibilidade.
+  try {
+    await pool.query(`
+      UPDATE mapeamento_blocos b
+      SET prefixo = regexp_replace(n.novo_nome, '\\s\\d{2}$', '')
+      FROM mapeamento_niveis n
+      WHERE n.bloco_id = b.id AND n.nivel = 0 AND b.prefixo IS NULL
+    `);
+  } catch(e) { console.error('[MAPEAMENTO] Erro ao preencher prefixo dos blocos:', e.message); }
+
   // Trava de segurança no banco: impede que dois blocos com o mesmo número
   // coexistam na mesma sessão, mesmo que algum caminho de código futuro falhe.
   await pool.query(`
@@ -872,17 +884,9 @@ app.post('/api/mapeamento/sessao', autenticarAdm, async (req, res) => {
       const blocoId = uuidv4();
       const prefixo = listaPrefixos[b] || listaPrefixos[0];
       await pool.query(
-        'INSERT INTO mapeamento_blocos (id,sessao_id,numero_bloco) VALUES ($1,$2,$3)',
-        [blocoId, id, b + 1]
+        'INSERT INTO mapeamento_blocos (id,sessao_id,numero_bloco,prefixo) VALUES ($1,$2,$3,$4)',
+        [blocoId, id, b + 1, prefixo]
       );
-      for (let n = 0; n <= 10; n++) {
-        const nivel_str = String(n).padStart(2, '0');
-        const novo_nome = `${prefixo} ${nivel_str}`;
-        await pool.query(
-          'INSERT INTO mapeamento_niveis (id,bloco_id,sessao_id,nivel,novo_nome) VALUES ($1,$2,$3,$4,$5)',
-          [uuidv4(), blocoId, id, n, novo_nome]
-        );
-      }
     }
     res.json({ id });
   } catch(e) { res.status(500).json({ erro: e.message }); }
@@ -925,6 +929,41 @@ app.get('/api/mapeamento/bloco', async (req, res) => {
       [bloco.id]
     );
     res.json({ ...bloco, niveis });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Iniciar bloco: cria os níveis com a quantidade informada (idempotente)
+app.patch('/api/mapeamento/bloco/:id/iniciar', async (req, res) => {
+  try {
+    const totalNiveis = parseInt(req.body.total_niveis);
+    if (!totalNiveis || totalNiveis < 1 || totalNiveis > 50) {
+      return res.status(400).json({ erro: 'Quantidade de níveis inválida' });
+    }
+
+    const { rows: [bloco] } = await pool.query('SELECT * FROM mapeamento_blocos WHERE id=$1', [req.params.id]);
+    if (!bloco) return res.status(404).json({ erro: 'Bloco não encontrado' });
+
+    const { rows: existentes } = await pool.query(
+      'SELECT * FROM mapeamento_niveis WHERE bloco_id=$1 ORDER BY nivel', [req.params.id]
+    );
+    if (existentes.length) {
+      // Já iniciado (ex.: reload de página) — apenas devolve o que já existe
+      return res.json({ niveis: existentes });
+    }
+
+    const prefixo = bloco.prefixo || '';
+    const niveisCriados = [];
+    for (let n = 0; n < totalNiveis; n++) {
+      const nivel_str = String(n).padStart(2, '0');
+      const novo_nome = prefixo ? `${prefixo} ${nivel_str}` : nivel_str;
+      const nivelId = uuidv4();
+      await pool.query(
+        'INSERT INTO mapeamento_niveis (id,bloco_id,sessao_id,nivel,novo_nome) VALUES ($1,$2,$3,$4,$5)',
+        [nivelId, req.params.id, bloco.sessao_id, n, novo_nome]
+      );
+      niveisCriados.push({ id: nivelId, bloco_id: req.params.id, sessao_id: bloco.sessao_id, nivel: n, novo_nome, id_local_bipado: null, status: 'pendente' });
+    }
+    res.json({ niveis: niveisCriados });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
@@ -1020,18 +1059,14 @@ app.patch('/api/mapeamento/sessao/:id/blocos', autenticarAdm, async (req, res) =
       if (atual === 0) { const err = new Error('Sessão sem blocos para usar como referência'); err.status = 400; throw err; }
 
       // Descobre o prefixo do último bloco e o passo de incremento entre colunas
-      async function prefixoDoBloco(blocoId) {
-        const { rows } = await client.query(
-          'SELECT novo_nome FROM mapeamento_niveis WHERE bloco_id=$1 AND nivel=0', [blocoId]
-        );
-        const nome = rows[0]?.novo_nome || '';
-        return nome.replace(/\s\d{2}$/, ''); // remove o sufixo do nível (" 00")
+      function prefixoDoBloco(bloco) {
+        return bloco.prefixo || '';
       }
 
       let passo = 2;
-      const ultimoPrefixo = await prefixoDoBloco(blocos[atual - 1].id);
+      const ultimoPrefixo = prefixoDoBloco(blocos[atual - 1]);
       if (atual >= 2) {
-        const penultimoPrefixo = await prefixoDoBloco(blocos[atual - 2].id);
+        const penultimoPrefixo = prefixoDoBloco(blocos[atual - 2]);
         const numUlt = parseInt(ultimoPrefixo.split(' ').pop());
         const numPen = parseInt(penultimoPrefixo.split(' ').pop());
         if (!isNaN(numUlt) && !isNaN(numPen) && numUlt !== numPen) passo = numUlt - numPen;
@@ -1048,17 +1083,9 @@ app.patch('/api/mapeamento/sessao/:id/blocos', autenticarAdm, async (req, res) =
         const novoPrefixo = `${head} ${String(colAtual).padStart(padLen, '0')}`;
         const blocoId = uuidv4();
         await client.query(
-          'INSERT INTO mapeamento_blocos (id,sessao_id,numero_bloco) VALUES ($1,$2,$3)',
-          [blocoId, req.params.id, b + 1]
+          'INSERT INTO mapeamento_blocos (id,sessao_id,numero_bloco,prefixo) VALUES ($1,$2,$3,$4)',
+          [blocoId, req.params.id, b + 1, novoPrefixo]
         );
-        for (let n = 0; n <= 10; n++) {
-          const nivel_str = String(n).padStart(2, '0');
-          const novo_nome = `${novoPrefixo} ${nivel_str}`;
-          await client.query(
-            'INSERT INTO mapeamento_niveis (id,bloco_id,sessao_id,nivel,novo_nome) VALUES ($1,$2,$3,$4,$5)',
-            [uuidv4(), blocoId, req.params.id, n, novo_nome]
-          );
-        }
       }
     }
 

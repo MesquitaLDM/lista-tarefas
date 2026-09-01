@@ -254,6 +254,20 @@ input.finput:focus{border-color:var(--orange)}
       <div id="lista-blocos-resumo"></div>
     </div>
 
+    <!-- ESTADO: QUANTIDADE DE NÍVEIS DO BLOCO -->
+    <div id="prompt-qtd-niveis" style="display:none">
+      <div class="bip-box">
+        <div class="bip-label"><i class="ti ti-stack-2"></i> <span id="qtd-niveis-titulo">Bloco</span> — quantidade de níveis</div>
+        <p style="font-size:12px;color:var(--text3);margin:0 0 10px">Quantos níveis (posições) tem este local?</p>
+        <input class="bip-input" id="input-qtd-niveis" type="number" min="1" max="50" placeholder="Ex: 11" inputmode="numeric"
+          onkeydown="if(event.key==='Enter') confirmarQtdNiveis()">
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn-secondary" onclick="cancelarPromptQtdNiveis()" style="flex:1">Cancelar</button>
+          <button class="btn-primary" onclick="confirmarQtdNiveis()" style="flex:2"><i class="ti ti-check"></i> Começar bipagem</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ESTADO: BIPANDO BLOCO -->
     <div id="estado-bloco" style="display:none">
       <div class="bloco-header">
@@ -624,7 +638,52 @@ async function bipBloco(numero) {
   const r = await fetch(`/api/mapeamento/bloco?sessao_id=${sessaoAtual.id}&numero=${num}`);
   blocoAtual = await r.json();
 
+  if (!blocoAtual.niveis || !blocoAtual.niveis.length) {
+    // Bloco ainda não foi iniciado — pede a quantidade de níveis deste local antes de bipar
+    mostrarPromptQtdNiveis();
+    return;
+  }
+
   document.getElementById('estado-aguarda-bloco').style.display = 'none';
+  document.getElementById('estado-bloco').style.display = 'block';
+  alerta('');
+  renderBloco();
+  setTimeout(() => document.getElementById('input-nivel').focus(), 100);
+}
+
+let _ultimaQtdNiveis = 11;
+
+function mostrarPromptQtdNiveis() {
+  document.getElementById('estado-aguarda-bloco').style.display = 'none';
+  document.getElementById('estado-bloco').style.display = 'none';
+  document.getElementById('prompt-qtd-niveis').style.display = 'block';
+  alerta('');
+  document.getElementById('qtd-niveis-titulo').textContent = `Bloco ${blocoAtual.numero_bloco}`;
+  document.getElementById('input-qtd-niveis').value = _ultimaQtdNiveis;
+  setTimeout(() => { document.getElementById('input-qtd-niveis').focus(); document.getElementById('input-qtd-niveis').select(); }, 100);
+}
+
+function cancelarPromptQtdNiveis() {
+  document.getElementById('prompt-qtd-niveis').style.display = 'none';
+  document.getElementById('estado-aguarda-bloco').style.display = 'block';
+  blocoAtual = null;
+}
+
+async function confirmarQtdNiveis() {
+  const qtd = parseInt(document.getElementById('input-qtd-niveis').value);
+  if (!qtd || qtd < 1 || qtd > 50) { alerta('Informe uma quantidade de níveis válida (1 a 50)', 'amber'); return; }
+
+  const r = await fetch(`/api/mapeamento/bloco/${blocoAtual.id}/iniciar`, {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ total_niveis: qtd })
+  });
+  const data = await r.json();
+  if (data.erro) { alerta('⚠️ ' + data.erro); return; }
+
+  blocoAtual.niveis = data.niveis;
+  _ultimaQtdNiveis = qtd;
+
+  document.getElementById('prompt-qtd-niveis').style.display = 'none';
   document.getElementById('estado-bloco').style.display = 'block';
   alerta('');
   renderBloco();
