@@ -442,16 +442,28 @@ app.post('/api/listas/:id/importar', autenticarAdm, upload.single('file'), async
 
     const valid = data.filter(r => getVal(r,map.sku) || getVal(r,map.descricao));
 
+    const COLS = 12;
+    const CHUNK = 500;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (const r of valid) {
+      for (let i = 0; i < valid.length; i += CHUNK) {
+        const chunk = valid.slice(i, i + CHUNK);
+        const values = [];
+        const placeholders = chunk.map((r, idx) => {
+          values.push(
+            uuidv4(), req.params.id, getVal(r,map.sku), getVal(r,map.descricao), getVal(r,map.ean),
+            getVal(r,map.qtd)||'1', getVal(r,map.local_origem), getVal(r,map.local_destino),
+            getVal(r,map.curva), getVal(r,map.log), getVal(r,map.responsavel), getVal(r,map.usuario)
+          );
+          const base = idx * COLS;
+          const ph = Array.from({length: COLS}, (_, k) => `$${base + k + 1}`).join(',');
+          return `(${ph})`;
+        });
         await client.query(
           `INSERT INTO itens (id,lista_id,sku,descricao,ean,qtd,local_origem,local_destino,curva,log,responsavel,usuario)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-          [uuidv4(), req.params.id, getVal(r,map.sku), getVal(r,map.descricao), getVal(r,map.ean),
-           getVal(r,map.qtd)||'1', getVal(r,map.local_origem), getVal(r,map.local_destino),
-           getVal(r,map.curva), getVal(r,map.log), getVal(r,map.responsavel), getVal(r,map.usuario)]
+           VALUES ${placeholders.join(',')}`,
+          values
         );
       }
       await client.query('COMMIT');

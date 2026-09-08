@@ -126,6 +126,17 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);color:var(--text);border:1px solid var(--border2);padding:10px 18px;border-radius:var(--radius);font-size:12px;z-index:300;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
 
+/* IMPORT PROGRESS */
+.import-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:400;align-items:center;justify-content:center}
+.import-overlay.open{display:flex}
+.import-progress-box{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:26px 30px;width:100%;max-width:320px;text-align:center}
+.import-spinner{width:38px;height:38px;border:3px solid var(--border2);border-top-color:var(--orange);border-radius:50%;margin:0 auto 14px;animation:import-spin .8s linear infinite}
+@keyframes import-spin{to{transform:rotate(360deg)}}
+.import-progress-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px}
+.import-bar-track{width:100%;height:6px;border-radius:4px;background:var(--bg3);overflow:hidden;margin-bottom:8px}
+.import-bar-fill{height:100%;width:0%;background:var(--orange);transition:width .2s}
+.import-progress-status{font-size:11px;color:var(--text3)}
+
 .empty-table{padding:28px;text-align:center;color:var(--text3);font-size:13px}
 .empty-table i{font-size:28px;display:block;margin-bottom:8px;opacity:.3}
 
@@ -446,6 +457,14 @@ input:focus,select:focus{outline:none;border-color:var(--orange)}
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="import-overlay" id="import-overlay">
+  <div class="import-progress-box">
+    <div class="import-spinner"></div>
+    <div class="import-progress-title">Importando arquivo…</div>
+    <div class="import-bar-track"><div class="import-bar-fill" id="import-bar-fill"></div></div>
+    <div class="import-progress-status" id="import-progress-status">Enviando arquivo...</div>
+  </div>
+</div>
 <input type="file" id="xlsx-input" accept=".xlsx,.xls" style="display:none">
 <input type="file" id="qry-input" accept=".xlsx,.xls" style="display:none">
 
@@ -974,20 +993,57 @@ async function salvarItem() {
   toast('Item adicionado');
 }
 
+function mostrarImportOverlay() {
+  document.getElementById('import-bar-fill').style.width = '0%';
+  document.getElementById('import-progress-status').textContent = 'Enviando arquivo...';
+  document.getElementById('import-overlay').classList.add('open');
+}
+
+function esconderImportOverlay() {
+  document.getElementById('import-overlay').classList.remove('open');
+}
+
+function uploadComProgresso(url, file) {
+  return new Promise((resolve, reject) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', API + url);
+    xhr.withCredentials = true;
+    xhr.upload.addEventListener('progress', (ev) => {
+      if (!ev.lengthComputable) return;
+      const pct = Math.round((ev.loaded / ev.total) * 100);
+      document.getElementById('import-bar-fill').style.width = pct + '%';
+      document.getElementById('import-progress-status').textContent =
+        pct < 100 ? `Enviando arquivo... ${pct}%` : 'Processando planilha, aguarde...';
+    });
+    xhr.onload = () => {
+      try { resolve(JSON.parse(xhr.responseText)); }
+      catch (e) { reject(e); }
+    };
+    xhr.onerror = () => reject(new Error('Falha de conexão ao importar'));
+    xhr.send(fd);
+  });
+}
+
 document.getElementById('xlsx-input').addEventListener('change', async function(e) {
   const file = e.target.files[0];
   if (!file) return;
-  const fd = new FormData();
-  fd.append('file', file);
-  const r = await fetch(API + '/api/listas/' + listaAtual.id + '/importar', { method: 'POST', body: fd, credentials:'include' });
-  const data = await r.json();
-  if (data.erro) { toast('Erro: ' + data.erro); return; }
-  toast(`✅ ${data.importados} itens importados!`);
-  const lista = await api('/api/listas/' + listaAtual.id);
-  todosItens = lista.itens;
-  renderTabela();
-  carregarSidebar();
-  e.target.value = '';
+  mostrarImportOverlay();
+  try {
+    const data = await uploadComProgresso('/api/listas/' + listaAtual.id + '/importar', file);
+    if (data.erro) { toast('Erro: ' + data.erro); return; }
+    toast(`✅ ${data.importados} itens importados!`);
+    const lista = await api('/api/listas/' + listaAtual.id);
+    todosItens = lista.itens;
+    renderTabela();
+    carregarSidebar();
+  } catch (err) {
+    toast('Erro ao importar: ' + err.message);
+  } finally {
+    esconderImportOverlay();
+    e.target.value = '';
+  }
 });
 
 document.getElementById('qry-input').addEventListener('change', async function(e) {
