@@ -1,0 +1,7 @@
+config.yaml
+perfil-chrome/
+relatorios/
+inspecao/
+__pycache__/
+*.pyc
+.pytest_cache/

@@ -1,0 +1,76 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TSRM Scanner — configuração. Copie para config.yaml e ajuste.
+# Os seletores abaixo são PONTO DE PARTIDA: rode `python -m tsrm_scanner inspecionar`
+# com o Profit Web aberto para descobrir os seletores reais da sua tela.
+# Seletores seguem a sintaxe do Playwright: CSS ("div.legenda"), texto ('text="1D"'),
+# ou combinações ('button:has-text("1D")').
+# ─────────────────────────────────────────────────────────────────────────────
+
+url_profit: ""                       # cole a URL do Profit Web que você usa (abrir-chrome abre nela)
+url_contem: "profit"                 # trecho da URL usado para achar a aba certa
+cdp_url: "http://127.0.0.1:9222"     # porta de depuração do Chrome (abrir-chrome usa a mesma)
+# chrome: "C:/Program Files/Google/Chrome/Application/chrome.exe"   # se não for achado sozinho
+
+arquivo_ativos: "ativos.txt"
+pasta_relatorios: "relatorios"
+
+# Quantos candles FECHADOS ler por TF. Diário/Semanal/Mensal precisam de histórico para
+# setups/Bollinger/IFR; no intraday a leitura é feita pelas mágicas (Regra 11).
+candles_por_tf: {M: 40, S: 40, D: 40, "60": 10, "15": 10}
+
+grafico:
+  seletor: "canvas >> nth=0"          # o maior <canvas> do gráfico (veja `inspecionar`)
+  y_cursor: 0.45                      # altura (fração do gráfico) onde o cursor passeia
+  margem_direita_px: 70               # largura da escala de preços à direita (não varrer ali)
+  margem_esquerda_px: 5
+  passo_px: 2                         # passo do cursor; menor = mais preciso, mais lento
+  espera_hover_s: 0.03                # tempo para a legenda atualizar após mover o cursor
+  descartar_candle_em_formacao: true  # TSRM usa só candles fechados
+
+legenda:
+  modo: dom                           # dom = lê o texto da página | ocr = screenshot + Tesseract
+  seletor: "div.legend"               # elemento(s) com o texto A/M/M/F e médias (veja `inspecionar`)
+  # Para modo ocr:
+  # regiao_ocr: [0, 0, 900, 60]       # x, y, largura, altura RELATIVOS ao canto do gráfico
+  # tesseract_cmd: "C:/Program Files/Tesseract-OCR/tesseract.exe"
+  # idioma_ocr: por
+  # escala_ocr: 3
+  #
+  # Regras de extração (opcional — sem isso usa os padrões do programa).
+  # {num} = número em formato brasileiro. O 1º grupo é o valor.
+  # campos:
+  #   ohlc_sequencial: '\bA\s*:?\s*({num}).*?\bM\s*:?\s*({num}).*?\bM\s*:?\s*({num}).*?\bF\s*:?\s*({num})'
+  #   mms3:   'MMS\s*\(3\)\s*({num})'
+  #   mme9:   'MME\s*\(9\)\s*({num})'
+  #   mms21:  'MMS\s*\(21\)\s*({num})'
+  #   mma200: 'MMA?\s*\(200\)\s*({num})'
+  #   mme400: 'MME\s*\(400\)\s*({num})'
+  #   ifr:    'IFR\s*\(9\)\s*({num})'
+  #   macd_hist: 'Histograma\s*({num})'
+  #   bb_sup: 'Bollinger.*?({num})'
+  # Alternativa posicional (os números na ordem em que aparecem; null pula um número):
+  # ordem: [open, high, low, close, null, mms3, mme9, mms21, mma200, mme400]
+
+# Passos de navegação. Tipos: clicar, clicar_direito, clicar_xy, clicar_grafico,
+# digitar, tecla (+ vezes), rolar, esperar, esperar_seletor. {ticker} é substituído.
+acoes:
+  trocar_ativo:
+    - {clicar_grafico: true}
+    - {digitar: "{ticker}"}           # no Profit, digitar sobre o gráfico abre a busca de ativo
+    - {tecla: Enter, esperar: 2.0}
+  timeframes:
+    M:    [{clicar: 'text="1M"', esperar: 1.5}]
+    S:    [{clicar: 'text="1S"', esperar: 1.5}]
+    D:    [{clicar: 'text="1D"', esperar: 1.5}]
+    "60": [{clicar: 'text="60"', esperar: 1.5}]
+    "15": [{clicar: 'text="15"', esperar: 1.5}]
+  ir_para_fim:
+    - {clicar_grafico: [0.5, 0.5]}
+    - {tecla: ArrowRight, vezes: 15, esperar: 0.5}
+
+parametros:
+  ifr_mensal_max: 78          # acima disso no Mensal = sobrecomprado → FICAR QUIETO
+  ifr_mensal_colapso: 30
+  buffer: 0.03                # buffer de confirmação acima/abaixo da MM (R$)
+  rr_minimo: 2.0              # R/R mínimo TSRM
+  stop_dist_min: 0.01         # stop pelo menos 1% distante da entrada
