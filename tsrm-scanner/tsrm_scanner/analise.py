@@ -276,13 +276,13 @@ def classificar(ticker: str, candles_por_tf: dict, p: Parametros | None = None) 
     rr = None
     if stop is not None and alvos:
         risco = abs(nivel - stop)
-        rr = abs(alvos[0] - nivel) / risco if risco > 0 else None
+        rr = round(abs(alvos[0] - nivel) / risco, 1) if risco > 0 else None
         if rr is not None and rr < p.rr_minimo:
-            rr2 = abs(alvos[-1] - nivel) / risco
+            rr2 = round(abs(alvos[-1] - nivel) / risco, 1)
             if rr2 >= p.rr_minimo:
-                obs.append(f"R/R no alvo 1 = {rr:.1f}:1; no alvo final = {rr2:.1f}:1 — considere parcial 30/70")
+                obs.append(f"R/R no alvo 1 = {_fmt(rr)[:-1]}:1; no alvo final = {_fmt(rr2)[:-1]}:1 — considere parcial 30/70")
             elif categoria != "AGUARDAR":
-                obs.append(f"R/R {rr:.1f}:1 abaixo do mínimo {p.rr_minimo:.0f}:1 — aguardar melhor ponto")
+                obs.append(f"R/R {_fmt(rr)[:-1]}:1 abaixo do mínimo {p.rr_minimo:.0f}:1 — aguardar melhor ponto")
                 categoria, estrelas = "AGUARDAR", 0
 
     for t in maiores:

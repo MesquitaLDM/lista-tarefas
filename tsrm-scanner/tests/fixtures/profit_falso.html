@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Profit Web (falso)</title>
+<style>body{background:#111;color:#ddd;font:13px sans-serif;margin:0}#tb button{margin:4px}.legend{position:absolute;left:10px;top:44px;white-space:pre}</style></head>
+<body><div id="tb"><button>1M</button><button>1S</button><button>1D</button><button>60</button><button>15</button> <span id="tk"></span></div>
+<canvas id="c" width="1000" height="500" style="position:absolute;top:40px;left:0"></canvas><div class="legend" id="lg"></div>
+<script>
+let ticker='PETR4', tf='1D', buf='', dados=[];
+const W=8, MARG=70, cv=document.getElementById('c'), ctx=cv.getContext('2d');
+function rnd(seed){return()=>{seed=(seed*16807)%2147483647;return seed/2147483647}}
+function gerar(){const r=rnd([...(ticker+tf)].reduce((a,c)=>a*31+c.charCodeAt(0),7)%2147483647||1);
+ const sobe={'1M':0.02,'1S':0.015,'1D':0.01,'60':0.005,'15':0.003}[tf]*(ticker==='VALE3'?-1:1);
+ let p=ticker==='VALE3'?90:20, out=[];for(let i=0;i<900;i++){const o=p;p=Math.max(1,p+sobe+(r()-0.5)*0.4);
+ out.push({o,c:p,h:Math.max(o,p)+r()*0.15,l:Math.min(o,p)-r()*0.15});}
+ const sma=(n,i)=>i<n-1?null:out.slice(i-n+1,i+1).reduce((a,x)=>a+x.c,0)/n;
+ let e9=null,e400=null;out.forEach((x,i)=>{e9=e9==null?x.c:e9+(x.c-e9)*2/10;e400=e400==null?x.c:e400+(x.c-e400)*2/401;
+ Object.assign(x,{m3:sma(3,i),e9,m21:sma(21,i),m200:sma(200,i),e400})});dados=out;desenhar();}
+const f=v=>v==null?'-':v.toFixed(2).replace('.',',');
+function desenhar(){ctx.fillStyle='#000';ctx.fillRect(0,0,1000,500);document.getElementById('tk').textContent=ticker+' '+tf;
+ const n=Math.floor((1000-MARG)/W),vis=dados.slice(-n),lo=Math.min(...vis.map(x=>x.l)),hi=Math.max(...vis.map(x=>x.h));
+ const y=v=>480-(v-lo)/(hi-lo)*460;vis.forEach((x,i)=>{ctx.fillStyle=x.c>x.o?'#2c2':'#c22';ctx.fillRect(i*W+1,y(Math.max(x.o,x.c)),W-2,Math.max(1,Math.abs(y(x.o)-y(x.c))))});}
+cv.addEventListener('mousemove',ev=>{const n=Math.floor((1000-MARG)/W),i=Math.floor(ev.offsetX/W);const vis=dados.slice(-n);const x=vis[Math.min(i,vis.length-1)];
+ if(ev.offsetX>1000-MARG)return;document.getElementById('lg').textContent=`${ticker} - ${tf}  A: ${f(x.o)}  M: ${f(x.h)}  M: ${f(x.l)}  F: ${f(x.c)}  V: +0,1%\nMMS (3) ${f(x.m3)}  MME (9) ${f(x.e9)}  MMS (21) ${f(x.m21)}  MMA (200) ${f(x.m200)}  MME (400) ${f(x.e400)}`});
+document.querySelectorAll('#tb button').forEach(b=>b.onclick=()=>{tf=b.textContent;gerar()});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'){if(buf){ticker=buf;buf='';gerar()}}else if(/^[A-Z0-9]$/i.test(e.key))buf+=e.key.toUpperCase()});
+gerar();
+// Exposto para o teste conferir a leitura contra a verdade.
+window.verdade=()=>dados.slice(-2,-1)[0];
+</script></body></html>

@@ -39,7 +39,7 @@ def _linha(r: Resultado, estrela="*") -> list:
     return [r.ticker, f"{r.categoria} {estrela * r.estrelas}".strip(),
             *[_estado_tf(r, tf) for tf in TIMEFRAMES],
             r.entrada, _fmt(r.stop), " / ".join(_fmt(a) for a in r.alvos) or "-",
-            f"{r.rr:.1f}:1" if r.rr else "-", obs]
+            _fmt(r.rr)[:-1] + ":1" if r.rr else "-", obs]
 
 
 # ── Terminal ──────────────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ def imprimir(resultados: list[Resultado]):
         print("Nenhum ativo aprovado nesta varredura.")
     for r in aprovados:
         print(f"\n{r.ticker:7} {r.rating:28} entrada {r.entrada} | stop {_fmt(r.stop)} | "
-              f"alvos {' / '.join(_fmt(a) for a in r.alvos) or '-'} | R/R {f'{r.rr:.1f}:1' if r.rr else '-'}")
+              f"alvos {' / '.join(_fmt(a) for a in r.alvos) or '-'} | R/R {_fmt(r.rr)[:-1] + ':1' if r.rr else '-'}")
         for tf in TIMEFRAMES:
             if tf in r.tfs:
                 print(f"   {NOME_TF[tf]:8} {r.tfs[tf].resumo()}")
@@ -117,7 +117,7 @@ def gerar_pdf(resultados: list[Resultado], caminho: Path, capturas: Path | None 
     for r in (r for r in resultados if r.aprovado):
         bloco = [PageBreak(), Paragraph(f"{r.ticker} — {r.categoria} {'*' * r.estrelas}", s_tit),
                  Paragraph(f"Entrada: {r.entrada} | Stop: {_fmt(r.stop)} | Alvos: "
-                           f"{' / '.join(_fmt(a) for a in r.alvos) or '-'} | R/R: {f'{r.rr:.1f}:1' if r.rr else '-'}", s_sub)]
+                           f"{' / '.join(_fmt(a) for a in r.alvos) or '-'} | R/R: {_fmt(r.rr)[:-1] + ':1' if r.rr else '-'}", s_sub)]
         for tf in TIMEFRAMES:
             if tf in r.tfs:
                 bloco.append(Paragraph(f"<b>{NOME_TF[tf]}:</b> {r.tfs[tf].resumo()}", s_txt))
