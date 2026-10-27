@@ -1,6 +1,7 @@
 """Linha de comando do TSRM Scanner.
 
     python -m tsrm_scanner abrir-chrome          # abre o Chrome com porta de depuração
+    python -m tsrm_scanner testar-interacao --ticker VALE3   # teste rápido, sem configurar nada
     python -m tsrm_scanner inspecionar           # ajuda a configurar seletores da legenda
     python -m tsrm_scanner testar-leitura PETR4 --tf D
     python -m tsrm_scanner analisar              # varre os ativos e gera o relatório
@@ -84,6 +85,12 @@ def cmd_inspecionar(a, cfg):
     inspecionar(cfg, RAIZ / "inspecao")
 
 
+def cmd_testar_interacao(a, cfg):
+    from .profit_web import testar_interacao
+    ok = testar_interacao(cfg, RAIZ / "inspecao", a.ticker)
+    sys.exit(0 if ok else 1)
+
+
 def cmd_testar(a, cfg):
     from .profit_web import ProfitWeb
     tfs = a.tf.split(",") if a.tf else ["D"]
@@ -160,6 +167,10 @@ def main(argv=None):
 
     s = sub.add_parser("inspecionar", help="lista elementos da página para configurar a leitura")
     s.set_defaults(fn=cmd_inspecionar)
+
+    s = sub.add_parser("testar-interacao", help="teste rápido, sem configurar nada: acha o gráfico, move o cursor, troca ativo")
+    s.add_argument("--ticker", help="se informado, testa também a troca de ativo (ex.: VALE3)")
+    s.set_defaults(fn=cmd_testar_interacao)
 
     s = sub.add_parser("testar-leitura", help="lê um ativo e mostra os candles extraídos")
     s.add_argument("ticker")

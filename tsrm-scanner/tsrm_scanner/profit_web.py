@@ -264,3 +264,80 @@ def inspecionar(cfg: dict, pasta: Path):
                 print(f"\nTEXTO DA LEGENDA COM O CONFIG ATUAL:\n{txt}\n\nVALORES EXTRAÍDOS: {v}")
             except Exception as e:  # noqa: BLE001
                 print(f"\nNão consegui ler a legenda com o config atual: {e}")
+
+
+MAIOR_CANVAS_JS = r"""
+() => {
+  let melhor = null;
+  for (const c of document.querySelectorAll('canvas')) {
+    const r = c.getBoundingClientRect();
+    if (r.width * r.height > (melhor ? melhor.w * melhor.h : 0)) melhor = {x: r.x, y: r.y, w: r.width, h: r.height};
+  }
+  return melhor;
+}
+"""
+
+
+def testar_interacao(cfg: dict, pasta: Path, ticker: str | None = None) -> bool:
+    """Teste sem configuração: conecta, acha o gráfico, passa o cursor e (opcional) troca o ativo.
+
+    Mostra as linhas da página que mudam conforme o cursor anda — é ali que está a legenda.
+    """
+    pasta.mkdir(parents=True, exist_ok=True)
+    ok = True
+
+    def item(passou: bool, msg: str):
+        nonlocal ok
+        ok &= passou
+        print(f"  [{'OK' if passou else 'FALHOU'}] {msg}")
+
+    print("\nTESTE DE INTERAÇÃO COM O PROFIT WEB")
+    with ProfitWeb(cfg, verbose=False) as pw:
+        pg = pw.page
+        item(True, f"conectado à aba: {pg.title()} — {pg.url}")
+        pg.screenshot(path=str(pasta / "1_antes.png"))
+
+        box = pg.evaluate(MAIOR_CANVAS_JS)
+        if not box or box["w"] < 200:
+            item(False, "nenhum gráfico (canvas) encontrado na aba — o gráfico está aberto e visível?")
+            return False
+        item(True, f"gráfico encontrado: {int(box['w'])}x{int(box['h'])} px em ({int(box['x'])},{int(box['y'])})")
+
+        # Varre o cursor da esquerda para a direita, registrando o texto da página em cada ponto.
+        y = box["y"] + box["h"] * 0.45
+        textos = []
+        for frac in (0.2, 0.35, 0.5, 0.65, 0.8):
+            pg.mouse.move(box["x"] + box["w"] * frac, y, steps=15)
+            time.sleep(0.4)
+            textos.append(pg.evaluate("document.body.innerText").splitlines())
+        pg.screenshot(path=str(pasta / "2_cursor_no_grafico.png"))
+        base = set(textos[0])
+        mudaram = [l for t in textos[1:] for l in t if l not in base and l.strip()]
+        mudaram = list(dict.fromkeys(mudaram))
+        item(bool(mudaram), "a página reage ao cursor (legenda em texto)" if mudaram else
+             "nenhum texto mudou com o cursor — a legenda deve estar desenhada no gráfico (usar modo OCR)")
+        if mudaram:
+            print("      Linhas que mudaram ao mover o cursor (candidatas à legenda):")
+            for l in mudaram[:12]:
+                print(f"        {l[:150]}")
+            nums = leitura.extrair("\n".join(mudaram))
+            if leitura.valido(nums):
+                print(f"      OHLC reconhecido automaticamente: A={nums['open']} M={nums['high']} m={nums['low']} F={nums['close']}")
+
+        if ticker:
+            antes = pg.evaluate("document.body.innerText")
+            pg.mouse.click(box["x"] + box["w"] * 0.5, y)
+            pg.keyboard.type(ticker.upper(), delay=80)
+            time.sleep(0.8)
+            pg.screenshot(path=str(pasta / "3_digitando_ticker.png"))
+            pg.keyboard.press("Enter")
+            time.sleep(2.5)
+            pg.screenshot(path=str(pasta / "4_depois_do_enter.png"))
+            depois = pg.evaluate("document.body.innerText")
+            trocou = ticker.upper() in depois and (ticker.upper() not in antes or depois != antes)
+            item(trocou, f"troca de ativo para {ticker.upper()} digitando sobre o gráfico" if trocou else
+                 f"não confirmei a troca para {ticker.upper()} — veja os prints 3 e 4; talvez seja preciso clicar "
+                 "no campo de busca do ativo antes (configurar acoes.trocar_ativo)")
+    print(f"\nPrints salvos em: {pasta.resolve()}")
+    print("RESULTADO: " + ("interação funcionando" if ok else "há itens a ajustar (veja acima)"))
+    return ok

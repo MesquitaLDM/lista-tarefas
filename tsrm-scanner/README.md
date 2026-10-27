@@ -57,7 +57,15 @@ onde ficam o gráfico, a legenda e os botões de período.
    Faça login no Profit Web e deixe **um gráfico** aberto, com as 5 médias, o Bollinger e,
    se possível, o IFR e o MACD (configuração oficial TSRM, escala linear).
 
-2. **Inspecione a página:**
+2. **Teste rápido de interação (não precisa configurar nada):**
+   ```
+   python -m tsrm_scanner testar-interacao --ticker VALE3
+   ```
+   Conecta na aba do Profit, acha o gráfico sozinho, passa o cursor sobre ele (você vê o mouse andar),
+   mostra as linhas da página que mudam com o cursor (a legenda) e testa a troca de ativo digitando o
+   ticker. Os prints ficam em `inspecao/`. Funciona mesmo sem as médias configuradas no gráfico.
+
+3. **Inspecione a página:**
    ```
    python -m tsrm_scanner inspecionar
    ```
@@ -68,10 +76,10 @@ onde ficam o gráfico, a legenda e os botões de período.
      canvas: use `legenda.modo: ocr` e instale o
      [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) com o idioma português.
 
-3. **Ajuste os botões de período** em `acoes.timeframes` (ex.: `clicar: 'text="1D"'`) e a
+4. **Ajuste os botões de período** em `acoes.timeframes` (ex.: `clicar: 'text="1D"'`) e a
    troca de ativo em `acoes.trocar_ativo`.
 
-4. **Teste a leitura:**
+5. **Teste a leitura:**
    ```
    python -m tsrm_scanner testar-leitura PETR4 --tf D
    ```
